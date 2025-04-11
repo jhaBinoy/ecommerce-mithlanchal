@@ -2,42 +2,73 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>The Mithlanchal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Mithlanchal - Home</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
         <a class="navbar-brand" href="/">The Mithlanchal</a>
-        <div class="navbar-nav">
-            <a class="nav-link" href="{{ url_for('cart') }}">Cart</a>
-            {% if current_user.is_authenticated %}
-                <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
-                {% if current_user.is_admin %}
-                    <a class="nav-link" href="{{ url_for('admin') }}">Admin</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ml-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="/">Home</a>
+                </li>
+                {% if current_user.is_authenticated %}
+                    {% if current_user.is_admin %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="/admin">Admin</a>
+                        </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/cart">Cart</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/logout">Logout</a>
+                    </li>
+                {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/login">Login</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/signup">Sign Up</a>
+                    </li>
                 {% endif %}
-            {% else %}
-                <a class="nav-link" href="{{ url_for('login') }}">Login/Signup</a>
-            {% endif %}
+            </ul>
         </div>
     </nav>
+
     <div class="container mt-4">
-        <h1>Products</h1>
+        <h1>Welcome to The Mithlanchal</h1>
         <div class="row">
             {% for product in products %}
                 <div class="col-md-4 mb-4">
                     <div class="card">
-                        <img src="{{ url_for('static', filename='uploads/' + product.image) }}" class="card-img-top" alt="{{ product.name }}">
+                        {% if product.image %}
+                            <img src="{{ url_for('static', filename=product.image) }}" class="card-img-top" alt="{{ product.name }}">
+                        {% else %}
+                            <img src="{{ url_for('static', filename='images/placeholder.jpg') }}" class="card-img-top" alt="Placeholder">
+                        {% endif %}
                         <div class="card-body">
                             <h5 class="card-title">{{ product.name }}</h5>
-                            <p class="card-text">Rs {{ product.price }}</p>
-                            <a href="{{ url_for('product', id=product.id) }}" class="btn btn-primary">View</a>
+                            <p class="card-text">{{ product.description|truncate(100) }}</p>
+                            <p class="card-text"><strong>₹{{ product.price }}</strong></p>
+                            <a href="{{ url_for('product', id=product.id) }}" class="btn btn-primary">View Product</a>
                         </div>
                     </div>
+                </div>
+            {% else %}
+                <div class="col-12">
+                    <p class="text-center">No products available yet.</p>
                 </div>
             {% endfor %}
         </div>
     </div>
+
     <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
 </body>
 </html>
