@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Checkout</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+</head>
+<body>
+    <div class="container mt-4">
+        <h1>Checkout</h1>
+        {% if order %}
+            <button id="rzp-button" class="btn btn-success">Pay Now</button>
+            <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+            <script>
+                var options = {
+                    "key": "{{ key }}",
+                    "amount": "{{ order.amount }}",
+                    "currency": "{{ order.currency }}",
+                    "order_id": "{{ order.id }}",
+                    "handler": function (response) {
+                        alert("Payment successful!");
+                        window.location.href = "{{ url_for('index') }}";
+                    }
+                };
+                var rzp = new Razorpay(options);
+                document.getElementById('rzp-button').onclick = function(e) {
+                    rzp.open();
+                    e.preventDefault();
+                }
+            </script>
+        {% else %}
+            <form method="POST">
+                <button type="submit" class="btn btn-primary">Proceed to Pay</button>
+            </form>
+        {% endif %}
+    </div>
+</body>
+</html>
