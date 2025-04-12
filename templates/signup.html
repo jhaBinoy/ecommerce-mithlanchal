@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Login</title>
+    <title>Sign Up</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
 </head>
 <body>
     <div class="container mt-4">
-        <h1>Login</h1>
+        <h1>Sign Up</h1>
         {% with messages = get_flashed_messages() %}
             {% if messages %}
                 {% for message in messages %}
@@ -24,9 +24,9 @@
                 <label>Password</label>
                 <input type="password" name="password" class="form-control" required>
             </div>
-            <button type="submit" class="btn btn-primary">Login</button>
+            <button type="submit" class="btn btn-primary">Sign Up</button>
         </form>
-        <p>Not registered? <a href="{{ url_for('signup') }}">Sign Up</a></p>
+        <p>Already registered? <a href="{{ url_for('login') }}">Login</a></p>
     </div>
 </body>
 </html>
