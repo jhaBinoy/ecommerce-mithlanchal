@@ -39,13 +39,23 @@ login_manager.login_view = 'login'
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
-# Create database tables at app startup
+# Initialize database and admin user
 with app.app_context():
     try:
         db.create_all()
+        # Add admin user if not exists
+        if not User.query.filter_by(email='admin@themithlanchal.com').first():
+            admin = User(
+                email='admin@themithlanchal.com',
+                password=generate_password_hash('admin123'),
+                is_admin=True
+            )
+            db.session.add(admin)
+            db.session.commit()
+            app.logger.info("Admin user 'admin@themithlanchal.com' created")
         app.logger.info("Database tables created successfully")
     except Exception as e:
-        app.logger.error(f"Failed to create database tables: {e}")
+        app.logger.error(f"Failed to initialize database or admin: {e}")
 
 @app.route('/')
 def index():
@@ -101,20 +111,19 @@ def admin():
     return render_template('admin.html', products=products)
 
 @app.route('/product/<int:id>')
-def product(id):
+def product():
     product = Product.query.get_or_404(id)
     return render_template('product.html', product=product)
 
 @app.route('/cart')
 @login_required
 def cart():
-    return render_template('cart.html')  # Placeholder for now
+    return render_template('cart.html')  # Placeholder
 
 @app.route('/checkout')
 @login_required
 def checkout():
-    # Placeholder for Razorpay integration
-    return render_template('checkout.html')
+    return render_template('checkout.html')  # Placeholder
 
 @app.route('/logout')
 @login_required
