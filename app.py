@@ -31,6 +31,16 @@ class Product(db.Model):
     description = db.Column(db.Text)
     image = db.Column(db.String(200))
 
+class CartItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    quantity = db.Column(db.Integer, default=1)
+    user = db.relationship('User', backref='cart_items')
+    product = db.relationship('Product')
+
+
+
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -115,10 +125,24 @@ def product(id):  # Fixed: Added 'id' parameter
     product = Product.query.get_or_404(id)
     return render_template('product.html', product=product)
 
-@app.route('/cart')
+@app.route('/cart', methods=['GET', 'POST'])
 @login_required
 def cart():
-    return render_template('cart.html')  # Placeholder
+    if request.method == 'POST':
+        product_id = request.form.get('product_id')
+        quantity = int(request.form.get('quantity', 1))
+        cart_item = CartItem.query.filter_by(user_id=current_user.id, product_id=product_id).first()
+        if cart_item:
+            cart_item.quantity += quantity
+        else:
+            cart_item = CartItem(user_id=current_user.id, product_id=product_id, quantity=quantity)
+            db.session.add(cart_item)
+        db.session.commit()
+        flash('Item added to cart')
+        return redirect(url_for('cart'))
+    cart_items = CartItem.query.filter_by(user_id=current_user.id).all()
+    total = sum(item.product.price * item.quantity for item in cart_items)
+    return render_template('cart.html', cart_items=cart_items, total=total)
 
 @app.route('/checkout')
 @login_required
