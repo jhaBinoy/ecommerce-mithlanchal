@@ -5,7 +5,9 @@
     <title>Checkout - The Mithlanchal</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    {% if order %}
+        <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    {% endif %}
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
@@ -63,52 +65,75 @@
                         </tbody>
                     </table>
                     <p class="text-end"><strong>Total: ₹{{ total }}</strong></p>
-                    <div class="text-end">
-                        <button id="rzp-button" class="btn btn-primary">Pay Now</button>
-                    </div>
+                    {% if order %}
+                        <!-- Razorpay Payment -->
+                        <div class="text-end">
+                            <button id="rzp-button" class="btn btn-primary">Pay with Razorpay</button>
+                        </div>
+                        <script>
+                            var options = {
+                                "key": "{{ razorpay_key }}",
+                                "amount": "{{ order.amount }}",
+                                "currency": "{{ order.currency }}",
+                                "name": "The Mithlanchal",
+                                "description": "Order Payment",
+                                "order_id": "{{ order.id }}",
+                                "handler": function (response) {
+                                    var form = document.createElement("form");
+                                    form.method = "POST";
+                                    form.action = "{{ url_for('payment_success') }}";
+                                    var inputs = [
+                                        {name: "razorpay_payment_id", value: response.razorpay_payment_id},
+                                        {name: "razorpay_order_id", value: response.razorpay_order_id},
+                                        {name: "razorpay_signature", value: response.razorpay_signature},
+                                        {name: "db_order_id", value: "{{ db_order_id }}"}
+                                    ];
+                                    inputs.forEach(function(input) {
+                                        var el = document.createElement("input");
+                                        el.type = "hidden";
+                                        el.name = input.name;
+                                        el.value = input.value;
+                                        form.appendChild(el);
+                                    });
+                                    document.body.appendChild(form);
+                                    form.submit();
+                                },
+                                "prefill": {
+                                    "email": "{{ current_user.email }}"
+                                },
+                                "theme": {
+                                    "color": "#3399cc"
+                                }
+                            };
+                            var rzp = new Razorpay(options);
+                            document.getElementById('rzp-button').onclick = function(e) {
+                                rzp.open();
+                                e.preventDefault();
+                            }
+                        </script>
+                    {% else %}
+                        <!-- Payment Method Selection -->
+                        <form method="POST">
+                            <div class="mb-3">
+                                <label class="form-label">Payment Method</label>
+                                <div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="payment_method" id="razorpay" value="razorpay" checked>
+                                        <label class="form-check-label" for="razorpay">Pay Online (Razorpay)</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="payment_method" id="cod" value="cod">
+                                        <label class="form-check-label" for="cod">Cash on Delivery</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <button type="submit" class="btn btn-primary">Proceed</button>
+                            </div>
+                        </form>
+                    {% endif %}
                 </div>
             </div>
-            <script>
-                var options = {
-                    "key": "{{ razorpay_key }}",
-                    "amount": "{{ order.amount }}",
-                    "currency": "{{ order.currency }}",
-                    "name": "The Mithlanchal",
-                    "description": "Order Payment",
-                    "order_id": "{{ order.id }}",
-                    "handler": function (response) {
-                        // Submit payment details to server
-                        var form = document.createElement("form");
-                        form.method = "POST";
-                        form.action = "{{ url_for('payment_success') }}";
-                        var inputs = [
-                            {name: "razorpay_payment_id", value: response.razorpay_payment_id},
-                            {name: "razorpay_order_id", value: response.razorpay_order_id},
-                            {name: "razorpay_signature", value: response.razorpay_signature}
-                        ];
-                        inputs.forEach(function(input) {
-                            var el = document.createElement("input");
-                            el.type = "hidden";
-                            el.name = input.name;
-                            el.value = input.value;
-                            form.appendChild(el);
-                        });
-                        document.body.appendChild(form);
-                        form.submit();
-                    },
-                    "prefill": {
-                        "email": "{{ current_user.email }}"
-                    },
-                    "theme": {
-                        "color": "#3399cc"
-                    }
-                };
-                var rzp = new Razorpay(options);
-                document.getElementById('rzp-button').onclick = function(e) {
-                    rzp.open();
-                    e.preventDefault();
-                }
-            </script>
         {% else %}
             <p class="text-center">Your cart is empty.</p>
         {% endif %}
