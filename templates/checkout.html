@@ -5,9 +5,30 @@
     <title>Checkout - The Mithlanchal</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     {% if order %}
         <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     {% endif %}
+    <style>
+        .payment-option {
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        .payment-option:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-color: #0d6efd;
+        }
+        .payment-option input:checked + .card {
+            border-color: #0d6efd;
+            background-color: #e7f1ff;
+        }
+        .form-label {
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
@@ -42,33 +63,45 @@
             {% endif %}
         {% endwith %}
         {% if cart_items %}
-            <div class="card shadow-sm">
-                <div class="card-body">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Product</th>
-                                <th>Price</th>
-                                <th>Quantity</th>
-                                <th>Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in cart_items %}
-                                <tr>
-                                    <td>{{ item.product.name }}</td>
-                                    <td>₹{{ item.product.price }}</td>
-                                    <td>{{ item.quantity }}</td>
-                                    <td>₹{{ item.product.price * item.quantity }}</td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    <p class="text-end"><strong>Total: ₹{{ total }}</strong></p>
+            <div class="row">
+                <!-- Order Summary -->
+                <div class="col-lg-6">
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-body">
+                            <h4>Order Summary</h4>
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Price</th>
+                                        <th>Quantity</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in cart_items %}
+                                        <tr>
+                                            <td>{{ item.product.name }}</td>
+                                            <td>₹{{ item.product.price }}</td>
+                                            <td>{{ item.quantity }}</td>
+                                            <td>₹{{ item.product.price * item.quantity }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                            <p class="text-end"><strong>Total: ₹{{ total }}</strong></p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Checkout Form -->
+                <div class="col-lg-6">
                     {% if order %}
                         <!-- Razorpay Payment -->
-                        <div class="text-end">
-                            <button id="rzp-button" class="btn btn-primary">Pay with Razorpay</button>
+                        <div class="card shadow-sm">
+                            <div class="card-body text-center">
+                                <h4>Complete Payment</h4>
+                                <button id="rzp-button" class="btn btn-primary btn-lg">Pay with Razorpay</button>
+                            </div>
                         </div>
                         <script>
                             var options = {
@@ -112,25 +145,56 @@
                             }
                         </script>
                     {% else %}
-                        <!-- Payment Method Selection -->
-                        <form method="POST">
-                            <div class="mb-3">
-                                <label class="form-label">Payment Method</label>
-                                <div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="payment_method" id="razorpay" value="razorpay" checked>
-                                        <label class="form-check-label" for="razorpay">Pay Online (Razorpay)</label>
+                        <!-- Shipping and Payment Form -->
+                        <div class="card shadow-sm">
+                            <div class="card-body">
+                                <h4>Shipping Information</h4>
+                                <form method="POST">
+                                    <div class="mb-3">
+                                        <label for="email" class="form-label">Email</label>
+                                        <input type="email" class="form-control" id="email" name="email" value="{{ user_email }}" required>
                                     </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="payment_method" id="cod" value="cod">
-                                        <label class="form-check-label" for="cod">Cash on Delivery</label>
+                                    <div class="mb-3">
+                                        <label for="mobile_number" class="form-label">Mobile Number</label>
+                                        <input type="tel" class="form-control" id="mobile_number" name="mobile_number" placeholder="e.g., 9876543210" pattern="[0-9]{10}" required>
                                     </div>
-                                </div>
+                                    <div class="mb-3">
+                                        <label for="shipping_address" class="form-label">Shipping Address</label>
+                                        <textarea class="form-control" id="shipping_address" name="shipping_address" rows="4" required></textarea>
+                                    </div>
+                                    <h4 class="mt-4">Payment Method</h4>
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="payment-option">
+                                                <input type="radio" name="payment_method" value="razorpay" checked style="display: none;">
+                                                <div class="card payment-option">
+                                                    <div class="card-body text-center">
+                                                        <i class="fas fa-credit-card fa-2x mb-2"></i>
+                                                        <h5>Pay Online</h5>
+                                                        <p class="text-muted">Secure payment via Razorpay</p>
+                                                    </div>
+                                                </div>
+                                            </label>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="payment-option">
+                                                <input type="radio" name="payment_method" value="cod" style="display: none;">
+                                                <div class="card payment-option">
+                                                    <div class="card-body text-center">
+                                                        <i class="fas fa-money-bill-wave fa-2x mb-2"></i>
+                                                        <h5>Cash on Delivery</h5>
+                                                        <p class="text-muted">Pay when you receive</p>
+                                                    </div>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <button type="submit" class="btn btn-primary btn-lg">Place Order</button>
+                                    </div>
+                                </form>
                             </div>
-                            <div class="text-end">
-                                <button type="submit" class="btn btn-primary">Proceed</button>
-                            </div>
-                        </form>
+                        </div>
                     {% endif %}
                 </div>
             </div>

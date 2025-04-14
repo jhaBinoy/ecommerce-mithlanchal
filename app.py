@@ -53,6 +53,9 @@ class Order(db.Model):
     payment_id = db.Column(db.String(100), nullable=True)  # For Razorpay
     status = db.Column(db.String(20), default='pending')  # pending, confirmed, delivered
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    shipping_address = db.Column(db.Text, nullable=False)  # New field
+    mobile_number = db.Column(db.String(15), nullable=False)  # New field
+    email = db.Column(db.String(100), nullable=False)  # New field
     user = db.relationship('User', backref='orders')
     items = db.relationship('OrderItem', backref='order', cascade='all, delete-orphan')
 
@@ -204,12 +207,27 @@ def checkout():
         return redirect(url_for('cart'))
     total = sum(item.product.price * item.quantity for item in cart_items)
     if request.method == 'POST':
+        shipping_address = request.form.get('shipping_address')
+        mobile_number = request.form.get('mobile_number')
+        email = request.form.get('email')
         payment_method = request.form.get('payment_method')
+
+        # Basic validation
+        if not all([shipping_address, mobile_number, email, payment_method]):
+            flash('Please fill in all required fields')
+            return render_template('checkout.html', cart_items=cart_items, total=total)
+        if not (payment_method in ['razorpay', 'cod']):
+            flash('Invalid payment method')
+            return render_template('checkout.html', cart_items=cart_items, total=total)
+
         order = Order(
             user_id=current_user.id,
             total=total,
             payment_method=payment_method,
-            status='pending'
+            status='pending',
+            shipping_address=shipping_address,
+            mobile_number=mobile_number,
+            email=email
         )
         db.session.add(order)
         for item in cart_items:
@@ -243,7 +261,7 @@ def checkout():
             db.session.commit()
             flash('Order placed successfully with Cash on Delivery!')
             return redirect(url_for('order_confirmation', order_id=order.id))
-    return render_template('checkout.html', cart_items=cart_items, total=total)
+    return render_template('checkout.html', cart_items=cart_items, total=total, user_email=current_user.email)
 
 @app.route('/payment/success', methods=['POST'])
 @login_required
@@ -295,7 +313,9 @@ def generate_invoice(order_id):
     elements.append(Paragraph("The Mithlanchal - Invoice", styles['Title']))
     elements.append(Paragraph(f"Order #{order.id}", styles['Heading2']))
     elements.append(Paragraph(f"Date: {order.created_at.strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
-    elements.append(Paragraph(f"Customer: {order.user.email}", styles['Normal']))
+    elements.append(Paragraph(f"Customer Email: {order.email}", styles['Normal']))
+    elements.append(Paragraph(f"Mobile: {order.mobile_number}", styles['Normal']))
+    elements.append(Paragraph(f"Shipping Address: {order.shipping_address}", styles['Normal']))
     elements.append(Spacer(1, 12))
 
     data = [['Product', 'Price', 'Quantity', 'Total']]
