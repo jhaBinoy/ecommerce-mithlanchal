@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-change-this'
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.getcwd(), 'store.db')}"
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/store.db'  # Render-compatible path
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -38,8 +38,6 @@ class CartItem(db.Model):
     quantity = db.Column(db.Integer, default=1)
     user = db.relationship('User', backref='cart_items')
     product = db.relationship('Product')
-
-
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -121,7 +119,7 @@ def admin():
     return render_template('admin.html', products=products)
 
 @app.route('/product/<int:id>')
-def product(id):  # Fixed: Added 'id' parameter
+def product(id):
     product = Product.query.get_or_404(id)
     return render_template('product.html', product=product)
 
@@ -166,6 +164,27 @@ def checkout():
         flash(f'Error creating order: {str(e)}')
         return redirect(url_for('cart'))
 
+@app.route('/payment/success', methods=['POST'])
+@login_required
+def payment_success():
+    payment_id = request.form.get('razorpay_payment_id')
+    order_id = request.form.get('razorpay_order_id')
+    signature = request.form.get('razorpay_signature')
+    params_dict = {
+        'razorpay_order_id': order_id,
+        'razorpay_payment_id': payment_id,
+        'razorpay_signature': signature
+    }
+    try:
+        razorpay_client.utility.verify_payment_signature(params_dict)
+        # Clear cart
+        CartItem.query.filter_by(user_id=current_user.id).delete()
+        db.session.commit()
+        flash('Payment successful! Your order has been placed.')
+        return redirect(url_for('index'))
+    except Exception as e:
+        flash(f'Payment verification failed: {str(e)}')
+        return redirect(url_for('checkout'))
 
 @app.route('/logout')
 @login_required
