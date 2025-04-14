@@ -178,6 +178,23 @@ def remove_from_cart(cart_item_id):
     flash('Item removed from cart')
     return redirect(url_for('cart'))
 
+@app.route('/cart/decrease/<int:cart_item_id>', methods=['POST'])
+@login_required
+def decrease_cart_item(cart_item_id):
+    cart_item = CartItem.query.get_or_404(cart_item_id)
+    if cart_item.user_id != current_user.id:
+        flash('Unauthorized action')
+        return redirect(url_for('cart'))
+    if cart_item.quantity > 1:
+        cart_item.quantity -= 1
+        db.session.commit()
+        flash('Quantity decreased')
+    else:
+        db.session.delete(cart_item)
+        db.session.commit()
+        flash('Item removed from cart')
+    return redirect(url_for('cart'))
+
 @app.route('/checkout', methods=['GET', 'POST'])
 @login_required
 def checkout():
