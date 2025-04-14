@@ -186,6 +186,45 @@ def payment_success():
         flash(f'Payment verification failed: {str(e)}')
         return redirect(url_for('checkout'))
 
+@app.route('/cart/remove/<int:cart_item_id>', methods=['POST'])
+@login_required
+def remove_from_cart(cart_item_id):
+    cart_item = CartItem.query.get_or_404(cart_item_id)
+    if cart_item.user_id != current_user.id:
+        flash('Unauthorized action')
+        return redirect(url_for('cart'))
+    db.session.delete(cart_item)
+    db.session.commit()
+    flash('Item removed from cart')
+    return redirect(url_for('cart'))
+
+class Order(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    total = db.Column(db.Float, nullable=False)
+    payment_id = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User', backref='orders')
+
+@app.route('/search')
+def search():
+    query = request.args.get('q')
+    products = Product.query.filter(Product.name.ilike(f'%{query}%')).all()
+    return render_template('index.html', products=products)
+
+@app.route('/cart/remove/<int:cart_item_id>', methods=['POST'])
+@login_required
+def remove_from_cart(cart_item_id):
+    cart_item = CartItem.query.get_or_404(cart_item_id)
+    if cart_item.user_id != current_user.id:
+        flash('Unauthorized action')
+        return redirect(url_for('cart'))
+    db.session.delete(cart_item)
+    db.session.commit()
+    flash('Item removed from cart')
+    return redirect(url_for('cart'))
+
+
 @app.route('/logout')
 @login_required
 def logout():
