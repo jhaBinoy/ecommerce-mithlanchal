@@ -144,10 +144,28 @@ def cart():
     total = sum(item.product.price * item.quantity for item in cart_items)
     return render_template('cart.html', cart_items=cart_items, total=total)
 
-@app.route('/checkout')
+@app.route('/checkout', methods=['GET', 'POST'])
 @login_required
 def checkout():
-    return render_template('checkout.html')  # Placeholder
+    cart_items = CartItem.query.filter_by(user_id=current_user.id).all()
+    if not cart_items:
+        flash('Your cart is empty')
+        return redirect(url_for('cart'))
+    total = sum(item.product.price * item.quantity for item in cart_items) * 100  # Razorpay uses paise
+    order_data = {
+        'amount': int(total),
+        'currency': 'INR',
+        'receipt': f'order_{current_user.id}',
+        'payment_capture': 1
+    }
+    try:
+        order = razorpay_client.order.create(data=order_data)
+        return render_template('checkout.html', order=order, cart_items=cart_items, total=total/100,
+                             razorpay_key=os.getenv('RAZORPAY_KEY'))
+    except Exception as e:
+        flash(f'Error creating order: {str(e)}')
+        return redirect(url_for('cart'))
+
 
 @app.route('/logout')
 @login_required
