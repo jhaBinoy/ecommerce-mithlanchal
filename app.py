@@ -4,7 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import razorpay
-from datetime import datetime  # Added missing import
+from datetime import datetime
 from dotenv import load_dotenv
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -52,7 +52,7 @@ class Order(db.Model):
     payment_method = db.Column(db.String(20), nullable=False)  # 'razorpay' or 'cod'
     payment_id = db.Column(db.String(100), nullable=True)  # For Razorpay
     status = db.Column(db.String(20), default='pending')  # pending, confirmed, delivered
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)  # Fixed: datetime is now imported
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     user = db.relationship('User', backref='orders')
     items = db.relationship('OrderItem', backref='order', cascade='all, delete-orphan')
 
@@ -222,7 +222,6 @@ def checkout():
                 db.session.commit()
                 return redirect(url_for('cart'))
         elif payment_method == 'cod':
-            # Clear cart
             CartItem.query.filter_by(user_id=current_user.id).delete()
             db.session.commit()
             flash('Order placed successfully with Cash on Delivery!')
@@ -276,14 +275,12 @@ def generate_invoice(order_id):
     elements = []
     styles = getSampleStyleSheet()
 
-    # Header
     elements.append(Paragraph("The Mithlanchal - Invoice", styles['Title']))
     elements.append(Paragraph(f"Order #{order.id}", styles['Heading2']))
     elements.append(Paragraph(f"Date: {order.created_at.strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
     elements.append(Paragraph(f"Customer: {order.user.email}", styles['Normal']))
     elements.append(Spacer(1, 12))
 
-    # Order Details
     data = [['Product', 'Price', 'Quantity', 'Total']]
     for item in order.items:
         data.append([
@@ -307,7 +304,6 @@ def generate_invoice(order_id):
     elements.append(table)
     elements.append(Spacer(1, 12))
 
-    # Footer
     elements.append(Paragraph(f"Payment Method: {order.payment_method.title()}", styles['Normal']))
     if order.payment_id:
         elements.append(Paragraph(f"Payment ID: {order.payment_id}", styles['Normal']))
