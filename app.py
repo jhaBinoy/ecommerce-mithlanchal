@@ -111,7 +111,7 @@ def admin():
     return render_template('admin.html', products=products)
 
 @app.route('/product/<int:id>')
-def product():
+def product(id):  # Fixed: Added 'id' parameter
     product = Product.query.get_or_404(id)
     return render_template('product.html', product=product)
 
