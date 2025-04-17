@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}Manage Discounts{% endblock %}
+{% block content %}
+<div class="container my-5">
+    <h1>Manage Discount Codes</h1>
+    <form method="POST">
+        <div class="mb-3">
+            <label for="code" class="form-label">Discount Code</label>
+            <input type="text" class="form-control" id="code" name="code" required>
+        </div>
+        <div class="mb-3">
+            <label for="percentage" class="form-label">Percentage (%)</label>
+            <input type="number" step="0.1" class="form-control" id="percentage" name="percentage" required>
+        </div>
+        <div class="mb-3">
+            <label for="expiry" class="form-label">Expiry Date</label>
+            <input type="date" class="form-control" id="expiry" name="expiry" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Add Discount</button>
+    </form>
+    <h2 class="mt-5">Discount Codes</h2>
+    {% if discounts %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Percentage</th>
+                    <th>Expiry</th>
+                    <th>Active</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for discount in discounts %}
+                    <tr>
+                        <td>{{ discount.code }}</td>
+                        <td>{{ discount.percentage }}%</td>
+                        <td>{{ discount.expiry.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ 'Yes' if discount.active else 'No' }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No discount codes yet.</p>
+    {% endif %}
+    <a href="{{ url_for('admin') }}" class="btn btn-secondary mt-3">Manage Products</a>
+</div>
+{% endblock %}

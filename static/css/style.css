@@ -1,40 +1,5 @@
-body {
-    font-family: 'Arial', sans-serif;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-}
-
-.navbar-brand {
-    font-weight: bold;
-}
-
-.card-img-top {
-    transition: transform 0.3s;
-}
-
-.card-img-top:hover {
-    transform: scale(1.05);
-}
-
-.card {
-    border: none;
-    border-radius: 10px;
-}
-
-.btn-outline-primary {
-    transition: background-color 0.3s, color 0.3s;
-}
-
-.btn-outline-primary:hover {
-    background-color: #0d6efd;
-    color: white;
-}
-
-footer {
-    margin-top: auto;
-}
-
-.alert {
-    margin-bottom: 1rem;
+/* Custom styles for The Mithlanchal */
+.card:hover {
+    transform: scale(1.02);
+    transition: transform 0.2s;
 }

@@ -1,85 +1,28 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>{{ product.name }} - The Mithlanchal</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/">The Mithlanchal</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/">Home</a>
-                    </li>
-                    {% if current_user.is_authenticated %}
-                        {% if current_user.is_admin %}
-                            <li class="nav-item">
-                                <a class="nav-link" href="/admin">Admin</a>
-                            </li>
-                        {% endif %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="/cart">Cart</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/logout">Logout</a>
-                        </li>
-                    {% else %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="/login">Login</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/signup">Sign Up</a>
-                        </li>
-                    {% endif %}
-                </ul>
-            </div>
+{% extends 'base.html' %}
+{% block title %}{{ product.name }}{% endblock %}
+{% block content %}
+<div class="container my-5">
+    <div class="row">
+        <div class="col-md-6">
+            {% if product.image %}
+                <img src="{{ url_for('static', filename=product.image) }}" class="img-fluid" alt="{{ product.name }}">
+            {% else %}
+                <img src="{{ url_for('static', filename='images/placeholder.jpg') }}" class="img-fluid" alt="Placeholder">
+            {% endif %}
         </div>
-    </nav>
-
-    <div class="container my-5">
-        <div class="card shadow-sm">
-            <div class="row g-0">
-                <div class="col-md-6">
-                    {% if product.image %}
-                        <img src="{{ url_for('static', filename=product.image) }}" class="img-fluid rounded-start" alt="{{ product.name }}" style="height: 100%; object-fit: cover;">
-                    {% else %}
-                        <img src="{{ url_for('static', filename='images/placeholder.jpg') }}" class="img-fluid rounded-start" alt="Placeholder" style="height: 100%; object-fit: cover;">
-                    {% endif %}
-                </div>
-                <div class="col-md-6">
-                    <div class="card-body">
-                        <h1 class="card-title">{{ product.name }}</h1>
-                        <p class="card-text">{{ product.description }}</p>
-                        <p class="card-text"><strong>₹{{ product.price }}</strong></p>
-                        <form method="POST" action="{{ url_for('cart') }}">
-                            <input type="hidden" name="product_id" value="{{ product.id }}">
-                            <div class="input-group mb-3 w-50">
-                                <input type="number" name="quantity" value="1" min="1" class="form-control">
-                                <button type="submit" class="btn btn-primary">Add to Cart</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="text-center mt-4">
-            <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Back to Products</a>
+        <div class="col-md-6">
+            <h1>{{ product.name }}</h1>
+            <p><strong>₹{{ product.price }}</strong></p>
+            <p>{{ product.description }}</p>
+            {% if current_user.is_authenticated %}
+                <form method="POST" action="{{ url_for('cart') }}">
+                    <input type="hidden" name="product_id" value="{{ product.id }}">
+                    <button type="submit" class="btn btn-success">Add to Cart</button>
+                </form>
+            {% else %}
+                <p><a href="{{ url_for('login') }}">Login</a> to add to cart.</p>
+            {% endif %}
         </div>
     </div>
-
-    <footer class="bg-dark text-white py-4">
-        <div class="container text-center">
-            <p>© 2025 The Mithlanchal. All rights reserved.</p>
-        </div>
-    </footer>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+</div>
+{% endblock %}

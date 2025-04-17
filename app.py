@@ -2,6 +2,7 @@ import os
 from flask import Flask, render_template, request, redirect, url_for, flash, Response
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_mail import Mail, Message
 from werkzeug.security import generate_password_hash, check_password_hash
 import razorpay
 from datetime import datetime
@@ -17,8 +18,15 @@ app.config['SECRET_KEY'] = 'your-secret-key-change-this'
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.getcwd(), 'store.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'your-email@gmail.com')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD', 'your-app-password')
+app.config['MAIL_DEFAULT_SENDER'] = 'The Mithlanchal <your-email@gmail.com>'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 db = SQLAlchemy(app)
+mail = Mail(app)
 
 load_dotenv()
 razorpay_client = razorpay.Client(auth=(os.getenv('RAZORPAY_KEY', ''), os.getenv('RAZORPAY_SECRET', '')))
@@ -29,6 +37,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(100), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
+    mobile_number = db.Column(db.String(15), unique=True, nullable=True)
 
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -36,6 +45,7 @@ class Product(db.Model):
     price = db.Column(db.Float, nullable=False)
     description = db.Column(db.Text)
     image = db.Column(db.String(200))
+    category = db.Column(db.String(50), nullable=True)  # e.g., 'puja', 'saree'
 
 class CartItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -49,23 +59,33 @@ class Order(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     total = db.Column(db.Float, nullable=False)
-    payment_method = db.Column(db.String(20), nullable=False)  # 'razorpay' or 'cod'
-    payment_id = db.Column(db.String(100), nullable=True)  # For Razorpay
-    status = db.Column(db.String(20), default='pending')  # pending, confirmed, delivered
+    payment_method = db.Column(db.String(20), nullable=False)
+    payment_id = db.Column(db.String(100), nullable=True)
+    status = db.Column(db.String(20), default='pending')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    shipping_address = db.Column(db.Text, nullable=False)  # New field
-    mobile_number = db.Column(db.String(15), nullable=False)  # New field
-    email = db.Column(db.String(100), nullable=False)  # New field
+    shipping_address = db.Column(db.Text, nullable=False)
+    mobile_number = db.Column(db.String(15), nullable=False)
+    email = db.Column(db.String(100), nullable=False)
+    discount_code_id = db.Column(db.Integer, db.ForeignKey('discount_code.id'), nullable=True)
+    discount_applied = db.Column(db.Float, default=0.0)
     user = db.relationship('User', backref='orders')
     items = db.relationship('OrderItem', backref='order', cascade='all, delete-orphan')
+    discount_code = db.relationship('DiscountCode')
 
 class OrderItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
     product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
-    price = db.Column(db.Float, nullable=False)  # Store price at order time
+    price = db.Column(db.Float, nullable=False)
     product = db.relationship('Product')
+
+class DiscountCode(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), unique=True, nullable=False)
+    percentage = db.Column(db.Float, nullable=False)
+    expiry = db.Column(db.DateTime, nullable=False)
+    active = db.Column(db.Boolean, default=True)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -94,8 +114,23 @@ with app.app_context():
 
 @app.route('/')
 def index():
-    products = Product.query.all()
-    return render_template('index.html', products=products)
+    query = request.args.get('query', '')
+    category = request.args.get('category', '')
+    min_price = request.args.get('min_price', type=float)
+    max_price = request.args.get('max_price', type=float)
+    products_query = Product.query
+    if query:
+        products_query = products_query.filter(Product.name.ilike(f'%{query}%') | Product.description.ilike(f'%{query}%'))
+    if category:
+        products_query = products_query.filter(Product.category == category)
+    if min_price is not None:
+        products_query = products_query.filter(Product.price >= min_price)
+    if max_price is not None:
+        products_query = products_query.filter(Product.price <= max_price)
+    products = products_query.all()
+    categories = db.session.query(Product.category).distinct().all()
+    categories = [c[0] for c in categories if c[0]]
+    return render_template('index.html', products=products, categories=categories)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -133,17 +168,39 @@ def admin():
         name = request.form['name']
         price = float(request.form['price'])
         description = request.form['description']
+        category = request.form['category']
         image = request.files['image']
         filename = None
         if image:
             filename = os.path.join(app.config['UPLOAD_FOLDER'], image.filename)
             image.save(filename)
-        product = Product(name=name, price=price, description=description, image=filename)
+        product = Product(name=name, price=price, description=description, image=filename, category=category)
         db.session.add(product)
         db.session.commit()
         return redirect(url_for('admin'))
     products = Product.query.all()
     return render_template('admin.html', products=products)
+
+@app.route('/admin/discounts', methods=['GET', 'POST'])
+@login_required
+def admin_discounts():
+    if not current_user.is_admin:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        code = request.form['code'].upper()
+        percentage = float(request.form['percentage'])
+        expiry_str = request.form['expiry']
+        expiry = datetime.strptime(expiry_str, '%Y-%m-%d')
+        if DiscountCode.query.filter_by(code=code).first():
+            flash('Discount code already exists')
+        else:
+            discount = DiscountCode(code=code, percentage=percentage, expiry=expiry)
+            db.session.add(discount)
+            db.session.commit()
+            flash('Discount code added')
+        return redirect(url_for('admin_discounts'))
+    discounts = DiscountCode.query.all()
+    return render_template('admin_discounts.html', discounts=discounts)
 
 @app.route('/product/<int:id>')
 def product(id):
@@ -206,19 +263,33 @@ def checkout():
         flash('Your cart is empty')
         return redirect(url_for('cart'))
     total = sum(item.product.price * item.quantity for item in cart_items)
+    discount = 0.0
+    discount_code = None
     if request.method == 'POST':
         shipping_address = request.form.get('shipping_address')
         mobile_number = request.form.get('mobile_number')
         email = request.form.get('email')
         payment_method = request.form.get('payment_method')
+        discount_code_str = request.form.get('discount_code', '').upper()
 
         # Basic validation
         if not all([shipping_address, mobile_number, email, payment_method]):
             flash('Please fill in all required fields')
-            return render_template('checkout.html', cart_items=cart_items, total=total)
+            return render_template('checkout.html', cart_items=cart_items, total=total, discount=discount, user_email=current_user.email)
         if not (payment_method in ['razorpay', 'cod']):
             flash('Invalid payment method')
-            return render_template('checkout.html', cart_items=cart_items, total=total)
+            return render_template('checkout.html', cart_items=cart_items, total=total, discount=discount, user_email=current_user.email)
+
+        # Apply discount
+        if discount_code_str:
+            discount_code = DiscountCode.query.filter_by(
+                code=discount_code_str, active=True
+            ).filter(DiscountCode.expiry >= datetime.utcnow()).first()
+            if discount_code:
+                discount = total * (discount_code.percentage / 100)
+                total -= discount
+            else:
+                flash('Invalid or expired discount code')
 
         order = Order(
             user_id=current_user.id,
@@ -227,7 +298,9 @@ def checkout():
             status='pending',
             shipping_address=shipping_address,
             mobile_number=mobile_number,
-            email=email
+            email=email,
+            discount_code_id=discount_code.id if discount_code else None,
+            discount_applied=discount
         )
         db.session.add(order)
         for item in cart_items:
@@ -242,7 +315,7 @@ def checkout():
 
         if payment_method == 'razorpay':
             order_data = {
-                'amount': int(total * 100),  # Razorpay uses paise
+                'amount': int(total * 100),
                 'currency': 'INR',
                 'receipt': f'order_{order.id}',
                 'payment_capture': 1
@@ -250,7 +323,8 @@ def checkout():
             try:
                 razorpay_order = razorpay_client.order.create(data=order_data)
                 return render_template('checkout.html', order=razorpay_order, cart_items=cart_items, total=total,
-                                     razorpay_key=os.getenv('RAZORPAY_KEY'), db_order_id=order.id)
+                                     razorpay_key=os.getenv('RAZORPAY_KEY'), db_order_id=order.id, discount=discount,
+                                     user_email=current_user.email)
             except Exception as e:
                 flash(f'Error creating Razorpay order: {str(e)}')
                 db.session.delete(order)
@@ -259,9 +333,38 @@ def checkout():
         elif payment_method == 'cod':
             CartItem.query.filter_by(user_id=current_user.id).delete()
             db.session.commit()
+            try:
+                msg = Message(
+                    subject=f"The Mithlanchal - Order #{order.id} Confirmed",
+                    recipients=[order.email],
+                    body=f"""
+                    Dear Customer,
+
+                    Thank you for your order at The Mithlanchal!
+
+                    Order #{order.id}
+                    Date: {order.created_at.strftime('%Y-%m-%d %H:%M')}
+                    Total: ₹{order.total:.2f}
+                    {'Discount: ₹%.2f' % discount if discount > 0 else ''}
+                    Payment: Cash on Delivery
+                    Shipping: {order.shipping_address}
+                    Mobile: {order.mobile_number}
+
+                    Items:
+                    {''.join([f'- {item.product.name} (x{item.quantity}): ₹{item.price * item.quantity:.2f}\n' for item in order.items])}
+
+                    We'll notify you when it ships!
+
+                    Best,
+                    The Mithlanchal Team
+                    """
+                )
+                mail.send(msg)
+            except Exception as e:
+                app.logger.error(f"Email failed: {e}")
             flash('Order placed successfully with Cash on Delivery!')
             return redirect(url_for('order_confirmation', order_id=order.id))
-    return render_template('checkout.html', cart_items=cart_items, total=total, user_email=current_user.email)
+    return render_template('checkout.html', cart_items=cart_items, total=total, discount=discount, user_email=current_user.email)
 
 @app.route('/payment/success', methods=['POST'])
 @login_required
@@ -282,6 +385,35 @@ def payment_success():
         order.status = 'confirmed'
         CartItem.query.filter_by(user_id=current_user.id).delete()
         db.session.commit()
+        try:
+            msg = Message(
+                subject=f"The Mithlanchal - Order #{order.id} Confirmed",
+                recipients=[order.email],
+                body=f"""
+                Dear Customer,
+
+                Thank you for your order at The Mithlanchal!
+
+                Order #{order.id}
+                Date: {order.created_at.strftime('%Y-%m-%d %H:%M')}
+                Total: ₹{order.total:.2f}
+                {'Discount: ₹%.2f' % order.discount_applied if order.discount_applied > 0 else ''}
+                Payment: Online (ID: {payment_id})
+                Shipping: {order.shipping_address}
+                Mobile: {order.mobile_number}
+
+                Items:
+                {''.join([f'- {item.product.name} (x{item.quantity}): ₹{item.price * item.quantity:.2f}\n' for item in order.items])}
+
+                We'll notify you when it ships!
+
+                Best,
+                The Mithlanchal Team
+                """
+            )
+            mail.send(msg)
+        except Exception as e:
+            app.logger.error(f"Email failed: {e}")
         flash('Payment successful! Your order is confirmed.')
         return redirect(url_for('order_confirmation', order_id=order.id))
     except Exception as e:
@@ -326,6 +458,9 @@ def generate_invoice(order_id):
             item.quantity,
             f"₹{item.price * item.quantity:.2f}"
         ])
+    data.append(['', '', 'Subtotal', f"₹{sum(item.price * item.quantity for item in order.items):.2f}"])
+    if order.discount_applied > 0:
+        data.append(['', '', 'Discount', f"-₹{order.discount_applied:.2f}"])
     data.append(['', '', 'Total', f"₹{order.total:.2f}"])
     table = Table(data)
     table.setStyle(TableStyle([
