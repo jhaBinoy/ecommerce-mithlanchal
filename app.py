@@ -22,6 +22,9 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from io import BytesIO
+from wtforms import StringField, PasswordField, SelectField, SubmitField
+from wtforms.validators import DataRequired, Email, Length
+
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24).hex()
@@ -50,6 +53,14 @@ class SignupForm(FlaskForm):
     country_code = SelectField('Country Code', choices=[('+91', 'India (+91)'), ('+1', 'USA (+1)'), ('+44', 'UK (+44)'), ('+61', 'Australia (+61)')], default='+91', render_kw={'aria-label': 'Country code'})
     mobile_number = StringField('Mobile Number', validators=[Length(min=7, max=12)], render_kw={'aria-label': 'Mobile number', 'pattern': '[0-9]{7,12}', 'title': 'Enter 7-12 digits'})
     submit = SubmitField('Sign Up')
+
+# Login Form
+class LoginForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired(), Email()], render_kw={'aria-label': 'Email address'})
+    password = PasswordField('Password', validators=[DataRequired()], render_kw={'aria-label': 'Password'})
+    submit = SubmitField('Login')
+
+
 
 # Models
 class User(UserMixin, db.Model):
@@ -162,15 +173,16 @@ def index():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST':
-        email = escape(request.form['email'])
-        password = request.form['password']
+    form = LoginForm()
+    if request.method == 'POST' and form.validate_on_submit():
+        email = escape(form.email.data)
+        password = form.password.data
         user = User.query.filter_by(email=email).first()
         if user and check_password_hash(user.password, password):
             login_user(user)
             return redirect(url_for('index'))
         flash('Invalid email or password')
-    return render_template('login.html')
+    return render_template('login.html', form=form)
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
