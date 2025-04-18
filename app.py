@@ -1,12 +1,19 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash, Response
+import uuid
+import re
+from flask import Flask, render_template, request, redirect, url_for, flash, Response, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_mail import Mail, Message
+from flask_wtf.csrf import CSRFProtect
+from flask_caching import Cache
 from werkzeug.security import generate_password_hash, check_password_hash
-import razorpay
+from werkzeug.utils import secure_filename
+from markupsafe import escape
+from PIL import Image
 from datetime import datetime
 from dotenv import load_dotenv
+import razorpay
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -14,8 +21,8 @@ from reportlab.lib.styles import getSampleStyleSheet
 from io import BytesIO
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-change-this'
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.getcwd(), 'store.db')}"
+app.config['SECRET_KEY'] = os.urandom(24).hex()
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', f"sqlite:///{os.path.join(os.getcwd(), 'store.db')}")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
@@ -27,6 +34,8 @@ app.config['MAIL_DEFAULT_SENDER'] = 'The Mithlanchal <your-email@gmail.com>'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 db = SQLAlchemy(app)
 mail = Mail(app)
+csrf = CSRFProtect(app)
+cache = Cache(app, config={'CACHE_TYPE': 'SimpleCache'})
 
 load_dotenv()
 razorpay_client = razorpay.Client(auth=(os.getenv('RAZORPAY_KEY', ''), os.getenv('RAZORPAY_SECRET', '')))
@@ -42,10 +51,10 @@ class User(UserMixin, db.Model):
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    price = db.Column(db.Float, nullable=False)
+    price = db.Column(db.Float, nullable=False, default=0.0)  # Add check_constraint in production DB
     description = db.Column(db.Text)
     image = db.Column(db.String(200))
-    category = db.Column(db.String(50), nullable=True)  # e.g., 'puja', 'saree'
+    category = db.Column(db.String(50), nullable=True)
 
 class CartItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -95,6 +104,12 @@ login_manager.login_view = 'login'
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
+# HTTPS Redirect
+@app.before_request
+def require_https():
+    if not app.debug and not request.is_secure:
+        return redirect(request.url.replace('http://', 'https://'))
+
 # Initialize database and admin user
 with app.app_context():
     try:
@@ -103,7 +118,8 @@ with app.app_context():
             admin = User(
                 email='admin@themithlanchal.com',
                 password=generate_password_hash('admin123'),
-                is_admin=True
+                is_admin=True,
+                mobile_number='+919876543210'
             )
             db.session.add(admin)
             db.session.commit()
@@ -113,6 +129,7 @@ with app.app_context():
         app.logger.error(f"Failed to initialize database or admin: {e}")
 
 @app.route('/')
+@cache.cached(timeout=60)
 def index():
     query = request.args.get('query', '')
     category = request.args.get('category', '')
@@ -120,7 +137,7 @@ def index():
     max_price = request.args.get('max_price', type=float)
     products_query = Product.query
     if query:
-        products_query = products_query.filter(Product.name.ilike(f'%{query}%') | Product.description.ilike(f'%{query}%'))
+        products_query = products_query.filter(Product.name.ilike(f'%{escape(query)}%') | Product.description.ilike(f'%{escape(query)}%'))
     if category:
         products_query = products_query.filter(Product.category == category)
     if min_price is not None:
@@ -135,7 +152,7 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form['email']
+        email = escape(request.form['email'])
         password = request.form['password']
         user = User.query.filter_by(email=email).first()
         if user and check_password_hash(user.password, password):
@@ -147,13 +164,15 @@ def login():
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
-        email = request.form['email']
+        email = escape(request.form['email'])
         password = request.form['password']
         country_code = request.form.get('country_code')
-        mobile_number = request.form.get('mobile_number')
+        mobile_number = escape(request.form.get('mobile_number'))
         full_mobile = f"{country_code}{mobile_number}" if mobile_number and country_code else None
         if User.query.filter_by(email=email).first():
             flash('Email already registered')
+        elif full_mobile and not re.match(r'\+[0-9]{10,15}', full_mobile):
+            flash('Invalid mobile number format')
         elif full_mobile and User.query.filter_by(mobile_number=full_mobile).first():
             flash('Mobile number already registered')
         else:
@@ -175,15 +194,20 @@ def admin():
     if not current_user.is_admin:
         return redirect(url_for('index'))
     if request.method == 'POST':
-        name = request.form['name']
+        name = escape(request.form['name'])
         price = float(request.form['price'])
-        description = request.form['description']
-        category = request.form['category']
+        description = escape(request.form['description'])
+        category = escape(request.form['category'])
         image = request.files['image']
         filename = None
-        if image:
-            filename = os.path.join(app.config['UPLOAD_FOLDER'], image.filename)
-            image.save(filename)
+        if image and image.filename:
+            ext = os.path.splitext(secure_filename(image.filename))[1]
+            filename = f"{uuid.uuid4().hex}{ext}"
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            img = Image.open(image)
+            img.thumbnail((800, 800))
+            img.save(filepath, quality=85)
+            filename = os.path.join('static/uploads', filename)
         product = Product(name=name, price=price, description=description, image=filename, category=category)
         db.session.add(product)
         db.session.commit()
@@ -197,7 +221,7 @@ def admin_discounts():
     if not current_user.is_admin:
         return redirect(url_for('index'))
     if request.method == 'POST':
-        code = request.form['code'].upper()
+        code = escape(request.form['code']).upper()
         percentage = float(request.form['percentage'])
         expiry_str = request.form['expiry']
         expiry = datetime.strptime(expiry_str, '%Y-%m-%d')
@@ -248,6 +272,18 @@ def remove_from_cart(cart_item_id):
     flash('Item removed from cart')
     return redirect(url_for('cart'))
 
+@app.route('/cart/increase/<int:cart_item_id>', methods=['POST'])
+@login_required
+def increase_cart_item(cart_item_id):
+    cart_item = CartItem.query.get_or_404(cart_item_id)
+    if cart_item.user_id != current_user.id:
+        flash('Unauthorized action')
+        return redirect(url_for('cart'))
+    cart_item.quantity += 1
+    db.session.commit()
+    flash('Quantity increased')
+    return redirect(url_for('cart'))
+
 @app.route('/cart/decrease/<int:cart_item_id>', methods=['POST'])
 @login_required
 def decrease_cart_item(cart_item_id):
@@ -265,18 +301,6 @@ def decrease_cart_item(cart_item_id):
         flash('Item removed from cart')
     return redirect(url_for('cart'))
 
-@app.route('/cart/increase/<int:cart_item_id>', methods=['POST'])
-@login_required
-def increase_cart_item(cart_item_id):
-    cart_item = CartItem.query.get_or_404(cart_item_id)
-    if cart_item.user_id != current_user.id:
-        flash('Unauthorized action')
-        return redirect(url_for('cart'))
-    cart_item.quantity += 1
-    db.session.commit()
-    flash('Quantity increased')
-    return redirect(url_for('cart'))
-
 @app.route('/checkout', methods=['GET', 'POST'])
 @login_required
 def checkout():
@@ -288,21 +312,17 @@ def checkout():
     discount = 0.0
     discount_code = None
     if request.method == 'POST':
-        shipping_address = request.form.get('shipping_address')
-        mobile_number = request.form.get('mobile_number')
-        email = request.form.get('email')
+        shipping_address = escape(request.form.get('shipping_address'))
+        mobile_number = escape(request.form.get('mobile_number'))
+        email = escape(request.form.get('email'))
         payment_method = request.form.get('payment_method')
-        discount_code_str = request.form.get('discount_code', '').upper()
-
-        # Basic validation
+        discount_code_str = escape(request.form.get('discount_code', '')).upper()
         if not all([shipping_address, mobile_number, email, payment_method]):
             flash('Please fill in all required fields')
             return render_template('checkout.html', cart_items=cart_items, total=total, discount=discount, user_email=current_user.email)
         if not (payment_method in ['razorpay', 'cod']):
             flash('Invalid payment method')
             return render_template('checkout.html', cart_items=cart_items, total=total, discount=discount, user_email=current_user.email)
-
-        # Apply discount
         if discount_code_str:
             discount_code = DiscountCode.query.filter_by(
                 code=discount_code_str, active=True
@@ -312,7 +332,6 @@ def checkout():
                 total -= discount
             else:
                 flash('Invalid or expired discount code')
-
         order = Order(
             user_id=current_user.id,
             total=total,
@@ -334,7 +353,6 @@ def checkout():
             )
             db.session.add(order_item)
         db.session.commit()
-
         if payment_method == 'razorpay':
             order_data = {
                 'amount': int(total * 100),
@@ -464,20 +482,18 @@ def generate_invoice(order_id):
     if order.user_id != current_user.id:
         flash('Unauthorized access')
         return redirect(url_for('index'))
-
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     elements = []
     styles = getSampleStyleSheet()
-
     elements.append(Paragraph("The Mithlanchal - Invoice", styles['Title']))
+    elements.append(Paragraph("GSTIN: 29ABCDE1234F1Z5", styles['Normal']))
     elements.append(Paragraph(f"Order #{order.id}", styles['Heading2']))
     elements.append(Paragraph(f"Date: {order.created_at.strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
     elements.append(Paragraph(f"Customer Email: {order.email}", styles['Normal']))
     elements.append(Paragraph(f"Mobile: {order.mobile_number}", styles['Normal']))
     elements.append(Paragraph(f"Shipping Address: {order.shipping_address}", styles['Normal']))
     elements.append(Spacer(1, 12))
-
     data = [['Product', 'Price', 'Quantity', 'Total']]
     for item in order.items:
         data.append([
@@ -503,12 +519,10 @@ def generate_invoice(order_id):
     ]))
     elements.append(table)
     elements.append(Spacer(1, 12))
-
     elements.append(Paragraph(f"Payment Method: {order.payment_method.title()}", styles['Normal']))
     if order.payment_id:
         elements.append(Paragraph(f"Payment ID: {order.payment_id}", styles['Normal']))
     elements.append(Paragraph("Thank you for shopping with The Mithlanchal!", styles['Normal']))
-
     doc.build(elements)
     buffer.seek(0)
     return Response(
@@ -516,6 +530,22 @@ def generate_invoice(order_id):
         mimetype='application/pdf',
         headers={'Content-Disposition': f'attachment;filename=invoice_{order.id}.pdf'}
     )
+
+@app.route('/privacy')
+def privacy():
+    return render_template('privacy.html')
+
+@app.route('/terms')
+def terms():
+    return render_template('terms.html')
+
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template('404.html'), 404
+
+@app.errorhandler(500)
+def internal_error(e):
+    return render_template('500.html'), 500
 
 @app.route('/logout')
 @login_required

@@ -1,50 +1,59 @@
-
 /* Custom styles for The Mithlanchal */
 body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    background-color: #FFF8E7; /* Cream */
+    background-color: #fff5e6; /* Light cream for warmth */
+    color: #2c1a0a; /* Dark brown for text */
+    font-family: 'Arial', sans-serif;
 }
+
 .content {
     flex: 1;
 }
-.custom-navbar {
-    background-color: #FF6F00; /* Deep Saffron */
-    padding: 15px 0;
+
+.navbar {
+    background-color: #8b1e2d !important; /* Deep maroon for tradition */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
-.custom-navbar .navbar-brand,
-.custom-navbar .nav-link {
-    color: #FFFFFF; /* White */
-    font-weight: 500;
+
+.navbar-brand, .nav-link {
+    color: #ffd700 !important; /* Gold for elegance */
 }
-.custom-navbar .nav-link:hover {
-    color: #FFD700; /* Gold */
+
+.nav-link:hover {
+    color: #fff !important; /* White on hover */
 }
+
 .footer {
-    background-color: #800000; /* Maroon */
-    padding: 10px 0;
-    color: #F5E050; /* Light Gold */
+    padding: 15px 0;
+    background-color: #8b1e2d; /* Maroon to match header */
+    color: #ffd700; /* Gold text */
     font-size: 14px;
     font-weight: 400;
 }
-.footer p {
-    margin: 0;
-}
+
 .card {
-    border: 1px solid #FF6F00; /* Saffron border */
-    background-color: #FFFFFF;
+    border: 1px solid #d4a373; /* Light gold border */
+    background-color: #ffffff;
 }
+
 .card:hover {
     transform: scale(1.02);
     transition: transform 0.2s;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
+
 .btn-primary {
-    background-color: #FF6F00; /* Saffron */
-    border-color: #FF6F00;
+    background-color: #d4a373; /* Gold button */
+    border-color: #d4a373;
 }
+
 .btn-primary:hover {
-    background-color: #FFD700; /* Gold */
-    border-color: #FFD700;
+    background-color: #b5895a; /* Darker gold */
+    border-color: #b5895a;
+}
+
+.input-group select {
+    max-width: 120px;
 }
