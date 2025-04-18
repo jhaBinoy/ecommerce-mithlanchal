@@ -1,5 +1,50 @@
+
 /* Custom styles for The Mithlanchal */
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background-color: #FFF8E7; /* Cream */
+}
+.content {
+    flex: 1;
+}
+.custom-navbar {
+    background-color: #FF6F00; /* Deep Saffron */
+    padding: 15px 0;
+}
+.custom-navbar .navbar-brand,
+.custom-navbar .nav-link {
+    color: #FFFFFF; /* White */
+    font-weight: 500;
+}
+.custom-navbar .nav-link:hover {
+    color: #FFD700; /* Gold */
+}
+.footer {
+    background-color: #800000; /* Maroon */
+    padding: 10px 0;
+    color: #F5E050; /* Light Gold */
+    font-size: 14px;
+    font-weight: 400;
+}
+.footer p {
+    margin: 0;
+}
+.card {
+    border: 1px solid #FF6F00; /* Saffron border */
+    background-color: #FFFFFF;
+}
 .card:hover {
     transform: scale(1.02);
     transition: transform 0.2s;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+.btn-primary {
+    background-color: #FF6F00; /* Saffron */
+    border-color: #FF6F00;
+}
+.btn-primary:hover {
+    background-color: #FFD700; /* Gold */
+    border-color: #FFD700;
 }
