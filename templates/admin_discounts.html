@@ -3,18 +3,19 @@
 {% block content %}
 <div class="container my-5">
     <h1>Manage Discount Codes</h1>
-    <form method="POST">
+    <form method="POST" action="{{ url_for('admin_discounts') }}">
+        {{ form.csrf_token }}
         <div class="mb-3">
             <label for="code" class="form-label">Discount Code</label>
-            <input type="text" class="form-control" id="code" name="code" required>
+            <input type="text" class="form-control" id="code" name="code" required value="{{ form.code.data or '' }}" aria-label="Discount code">
         </div>
         <div class="mb-3">
             <label for="percentage" class="form-label">Percentage (%)</label>
-            <input type="number" step="0.1" class="form-control" id="percentage" name="percentage" required>
+            <input type="number" step="0.1" class="form-control" id="percentage" name="percentage" required value="{{ form.percentage.data or '' }}" aria-label="Percentage">
         </div>
         <div class="mb-3">
             <label for="expiry" class="form-label">Expiry Date</label>
-            <input type="date" class="form-control" id="expiry" name="expiry" required>
+            <input type="date" class="form-control" id="expiry" name="expiry" required value="{{ form.expiry.data or '' }}" aria-label="Expiry date">
         </div>
         <button type="submit" class="btn btn-primary">Add Discount</button>
     </form>
@@ -30,18 +31,18 @@
                 </tr>
             </thead>
             <!--Start of Tawk.to Script-->
-<script type="text/javascript">
-    var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
-    (function(){
-    var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
-    s1.async=true;
-    s1.src='https://embed.tawk.to/68024700c5a0bc1911588f2e/1ip4eanet';
-    s1.charset='UTF-8';
-    s1.setAttribute('crossorigin','*');
-    s0.parentNode.insertBefore(s1,s0);
-    })();
-    </script>
-    <!--End of Tawk.to Script-->
+            <script type="text/javascript">
+                var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
+                (function(){
+                var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
+                s1.async=true;
+                s1.src='https://embed.tawk.to/68024700c5a0bc1911588f2e/1ip4eanet';
+                s1.charset='UTF-8';
+                s1.setAttribute('crossorigin','*');
+                s0.parentNode.insertBefore(s1,s0);
+                })();
+            </script>
+            <!--End of Tawk.to Script-->
             <tbody>
                 {% for discount in discounts %}
                     <tr>

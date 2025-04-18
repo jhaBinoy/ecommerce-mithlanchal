@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block title %}Product - {{ product.name }}{% endblock %}
 {% block content %}
 <div class="container mt-5">
     <div class="row">
@@ -12,26 +13,26 @@
         <div class="col-md-6">
             <h2>{{ product.name }}</h2>
             <p>{{ product.description }}</p>
-            <p>₹{{ product.price }} (incl. GST)</p>
-            <h4>₹{{ product.price }}</h4>
+            <h4>₹{{ product.price }} (incl. GST)</h4>
             <!--Start of Tawk.to Script-->
-<script type="text/javascript">
-    var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
-    (function(){
-    var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
-    s1.async=true;
-    s1.src='https://embed.tawk.to/68024700c5a0bc1911588f2e/1ip4eanet';
-    s1.charset='UTF-8';
-    s1.setAttribute('crossorigin','*');
-    s0.parentNode.insertBefore(s1,s0);
-    })();
-    </script>
-    <!--End of Tawk.to Script-->
+            <script type="text/javascript">
+                var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
+                (function(){
+                var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
+                s1.async=true;
+                s1.src='https://embed.tawk.to/68024700c5a0bc1911588f2e/1ip4eanet';
+                s1.charset='UTF-8';
+                s1.setAttribute('crossorigin','*');
+                s0.parentNode.insertBefore(s1,s0);
+                })();
+            </script>
+            <!--End of Tawk.to Script-->
             <form method="post" action="{{ url_for('cart') }}">
+                {{ form.csrf_token }}
                 <input type="hidden" name="product_id" value="{{ product.id }}">
                 <div class="form-group">
                     <label for="quantity">Quantity:</label>
-                    <input type="number" name="quantity" id="quantity" value="1" min="1" class="form-control w-25">
+                    <input type="number" name="quantity" id="quantity" value="{{ form.quantity.data or '1' }}" min="1" class="form-control w-25" aria-label="Quantity">
                 </div>
                 <button type="submit" class="btn btn-primary mt-3">Add to Cart</button>
             </form>
