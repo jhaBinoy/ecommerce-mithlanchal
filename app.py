@@ -1,12 +1,15 @@
 import os
 import uuid
 import re
-from flask import Flask, render_template, request, redirect, url_for, flash, Response, request
+from flask import Flask, render_template, request, redirect, url_for, flash, Response
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_mail import Mail, Message
+from flask_wtf import FlaskForm
 from flask_wtf.csrf import CSRFProtect
 from flask_caching import Cache
+from wtforms import StringField, PasswordField, SelectField, SubmitField
+from wtforms.validators import DataRequired, Email, Length
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from markupsafe import escape
@@ -40,6 +43,14 @@ cache = Cache(app, config={'CACHE_TYPE': 'SimpleCache'})
 load_dotenv()
 razorpay_client = razorpay.Client(auth=(os.getenv('RAZORPAY_KEY', ''), os.getenv('RAZORPAY_SECRET', '')))
 
+# Signup Form
+class SignupForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired(), Email()], render_kw={'aria-label': 'Email address'})
+    password = PasswordField('Password', validators=[DataRequired(), Length(min=6)], render_kw={'aria-label': 'Password'})
+    country_code = SelectField('Country Code', choices=[('+91', 'India (+91)'), ('+1', 'USA (+1)'), ('+44', 'UK (+44)'), ('+61', 'Australia (+61)')], default='+91', render_kw={'aria-label': 'Country code'})
+    mobile_number = StringField('Mobile Number', validators=[Length(min=7, max=12)], render_kw={'aria-label': 'Mobile number', 'pattern': '[0-9]{7,12}', 'title': 'Enter 7-12 digits'})
+    submit = SubmitField('Sign Up')
+
 # Models
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -51,7 +62,7 @@ class User(UserMixin, db.Model):
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    price = db.Column(db.Float, nullable=False, default=0.0)  # Add check_constraint in production DB
+    price = db.Column(db.Float, nullable=False, default=0.0)
     description = db.Column(db.Text)
     image = db.Column(db.String(200))
     category = db.Column(db.String(50), nullable=True)
@@ -163,11 +174,12 @@ def login():
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
-    if request.method == 'POST':
-        email = escape(request.form['email'])
-        password = request.form['password']
-        country_code = request.form.get('country_code')
-        mobile_number = escape(request.form.get('mobile_number'))
+    form = SignupForm()
+    if request.method == 'POST' and form.validate_on_submit():
+        email = escape(form.email.data)
+        password = form.password.data
+        country_code = form.country_code.data
+        mobile_number = escape(form.mobile_number.data)
         full_mobile = f"{country_code}{mobile_number}" if mobile_number and country_code else None
         if User.query.filter_by(email=email).first():
             flash('Email already registered')
@@ -186,7 +198,7 @@ def signup():
             db.session.commit()
             login_user(user)
             return redirect(url_for('index'))
-    return render_template('signup.html')
+    return render_template('signup.html', form=form)
 
 @app.route('/admin', methods=['GET', 'POST'])
 @login_required

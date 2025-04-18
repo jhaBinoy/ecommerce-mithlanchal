@@ -32,6 +32,7 @@
             <tr>
                 <td>{{ item.product.name }}</td>
                 <td>₹{{ item.product.price }}</td>
+                <td>₹{{ product.price }} (incl. GST)</td>
                 <td>
                     <form method="post" action="{{ url_for('increase_cart_item', cart_item_id=item.id) }}" style="display:inline;">
                         <button type="submit" class="btn btn-sm btn-outline-primary">+</button>

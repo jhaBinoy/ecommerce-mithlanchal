@@ -1,38 +1,39 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="container mt-5">
-    <h2>Sign Up</h2>
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-warning">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-    <form method="post" action="{{ url_for('signup') }}">
-        {{form.csrf_token}}
-        <div class="form-group">
-            <label for="email">Email</label>
-            <input type="email" name="email" id="email" class="form-control" required>
-        </div>
-        <div class="form-group">
-            <label for="password">Password</label>
-            <input type="password" name="password" id="password" class="form-control" required>
-        </div>
-        <div class="form-group">
-            <label for="mobile_number">Mobile Number</label>
-            <div class="input-group">
-                <select name="country_code" id="country_code" class="form-control" style="width: 120px;">
-                    <option value="+91" selected>India (+91)</option>
-                    <option value="+1">USA (+1)</option>
-                    <option value="+44">UK (+44)</option>
-                    <option value="+61">Australia (+61)</option>
-                    <!-- Add more as needed -->
-                </select>
-                <input type="text" name="mobile_number" id="mobile_number" class="form-control" placeholder="9999999999" pattern="[0-9]{7,12}" title="Enter 7-12 digits">
+
+    {% extends "base.html" %}
+    {% block content %}
+    <div class="container mt-5">
+        <h2>Sign Up</h2>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-warning">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <form method="post" action="{{ url_for('signup') }}">
+            {{ form.csrf_token }}
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" name="email" id="email" class="form-control" required value="{{ form.email.data or '' }}" aria-label="Email address">
             </div>
-        </div>
-        <button type="submit" class="btn btn-primary">Sign Up</button>
-    </form>
-</div>
-{% endblock %}
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" name="password" id="password" class="form-control" required aria-label="Password">
+            </div>
+            <div class="form-group">
+                <label for="mobile_number">Mobile Number</label>
+                <div class="input-group">
+                    <select name="country_code" id="country_code" class="form-control" aria-label="Country code">
+                        <option value="+91" {% if form.country_code.data == '+91' %}selected{% endif %}>India (+91)</option>
+                        <option value="+1" {% if form.country_code.data == '+1' %}selected{% endif %}>USA (+1)</option>
+                        <option value="+44" {% if form.country_code.data == '+44' %}selected{% endif %}>UK (+44)</option>
+                        <option value="+61" {% if form.country_code.data == '+61' %}selected{% endif %}>Australia (+61)</option>
+                    </select>
+                    <input type="text" name="mobile_number" id="mobile_number" class="form-control" placeholder="9876543210" pattern="[0-9]{7,12}" title="Enter 7-12 digits" value="{{ form.mobile_number.data or '' }}" aria-label="Mobile number">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Sign Up</button>
+        </form>
+    </div>
+    {% endblock %}
+   
