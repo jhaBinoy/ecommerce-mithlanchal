@@ -334,30 +334,33 @@ def checkout():
             CartItem.query.filter_by(user_id=current_user.id).delete()
             db.session.commit()
             try:
+                items_list = ''
+                for item in order.items:
+                    items_list += f'- {item.product.name} (x{item.quantity}): ₹{item.price * item.quantity:.2f}\n'
                 msg = Message(
                     subject=f"The Mithlanchal - Order #{order.id} Confirmed",
                     recipients=[order.email],
                     body=f"""
-                    Dear Customer,
+Dear Customer,
 
-                    Thank you for your order at The Mithlanchal!
+Thank you for your order at The Mithlanchal!
 
-                    Order #{order.id}
-                    Date: {order.created_at.strftime('%Y-%m-%d %H:%M')}
-                    Total: ₹{order.total:.2f}
-                    {'Discount: ₹%.2f' % discount if discount > 0 else ''}
-                    Payment: Cash on Delivery
-                    Shipping: {order.shipping_address}
-                    Mobile: {order.mobile_number}
+Order #{order.id}
+Date: {order.created_at.strftime('%Y-%m-%d %H:%M')}
+Total: ₹{order.total:.2f}
+{f'Discount: ₹{discount:.2f}' if discount > 0 else ''}
+Payment: Cash on Delivery
+Shipping: {order.shipping_address}
+Mobile: {order.mobile_number}
 
-                    Items:
-                    {''.join([f'- {item.product.name} (x{item.quantity}): ₹{item.price * item.quantity:.2f}\n' for item in order.items])}
+Items:
+{items_list}
 
-                    We'll notify you when it ships!
+We'll notify you when it ships!
 
-                    Best,
-                    The Mithlanchal Team
-                    """
+Best,
+The Mithlanchal Team
+"""
                 )
                 mail.send(msg)
             except Exception as e:
@@ -386,30 +389,33 @@ def payment_success():
         CartItem.query.filter_by(user_id=current_user.id).delete()
         db.session.commit()
         try:
+            items_list = ''
+            for item in order.items:
+                items_list += f'- {item.product.name} (x{item.quantity}): ₹{item.price * item.quantity:.2f}\n'
             msg = Message(
                 subject=f"The Mithlanchal - Order #{order.id} Confirmed",
                 recipients=[order.email],
                 body=f"""
-                Dear Customer,
+Dear Customer,
 
-                Thank you for your order at The Mithlanchal!
+Thank you for your order at The Mithlanchal!
 
-                Order #{order.id}
-                Date: {order.created_at.strftime('%Y-%m-%d %H:%M')}
-                Total: ₹{order.total:.2f}
-                {'Discount: ₹%.2f' % order.discount_applied if order.discount_applied > 0 else ''}
-                Payment: Online (ID: {payment_id})
-                Shipping: {order.shipping_address}
-                Mobile: {order.mobile_number}
+Order #{order.id}
+Date: {order.created_at.strftime('%Y-%m-%d %H:%M')}
+Total: ₹{order.total:.2f}
+{f'Discount: ₹{order.discount_applied:.2f}' if order.discount_applied > 0 else ''}
+Payment: Online (ID: {payment_id})
+Shipping: {order.shipping_address}
+Mobile: {order.mobile_number}
 
-                Items:
-                {''.join([f'- {item.product.name} (x{item.quantity}): ₹{item.price * item.quantity:.2f}\n' for item in order.items])}
+Items:
+{items_list}
 
-                We'll notify you when it ships!
+We'll notify you when it ships!
 
-                Best,
-                The Mithlanchal Team
-                """
+Best,
+The Mithlanchal Team
+"""
             )
             mail.send(msg)
         except Exception as e:
