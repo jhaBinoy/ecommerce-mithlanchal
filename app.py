@@ -149,10 +149,20 @@ def signup():
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
+        country_code = request.form.get('country_code')
+        mobile_number = request.form.get('mobile_number')
+        full_mobile = f"{country_code}{mobile_number}" if mobile_number and country_code else None
         if User.query.filter_by(email=email).first():
             flash('Email already registered')
+        elif full_mobile and User.query.filter_by(mobile_number=full_mobile).first():
+            flash('Mobile number already registered')
         else:
-            user = User(email=email, password=generate_password_hash(password), is_admin=False)
+            user = User(
+                email=email,
+                password=generate_password_hash(password),
+                is_admin=False,
+                mobile_number=full_mobile
+            )
             db.session.add(user)
             db.session.commit()
             login_user(user)
