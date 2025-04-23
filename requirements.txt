@@ -12,3 +12,4 @@ flask-mail>=0.10.0
 flask-wtf>=1.0.0
 flask-caching>=2.0.0
 pillow>=9.0.0
+email_validator>=2.0.0

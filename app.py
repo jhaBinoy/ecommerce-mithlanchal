@@ -22,8 +22,9 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from io import BytesIO
-from wtforms import StringField, PasswordField, SelectField, SubmitField
-from wtforms.validators import DataRequired, Email, Length
+from wtforms import StringField, PasswordField, SelectField, SubmitField, TextAreaField, FloatField,IntegerField
+from wtforms.validators import DataRequired, Email, Length,NumberRange
+
 
 
 app = Flask(__name__)
@@ -45,6 +46,28 @@ cache = Cache(app, config={'CACHE_TYPE': 'SimpleCache'})
 
 load_dotenv()
 razorpay_client = razorpay.Client(auth=(os.getenv('RAZORPAY_KEY', ''), os.getenv('RAZORPAY_SECRET', '')))
+
+# Cart Update Form
+class CartUpdateForm(FlaskForm):
+    product_id = IntegerField('Product ID', validators=[DataRequired()], render_kw={'type': 'hidden'})
+    quantity = IntegerField('Quantity', validators=[DataRequired(), NumberRange(min=1)], render_kw={'aria-label': 'Quantity'})
+    submit = SubmitField('Update Cart')
+
+# Cart Form for Add to Cart
+class CartForm(FlaskForm):
+    product_id = IntegerField('Product ID', validators=[DataRequired()], render_kw={'type': 'hidden'})
+    quantity = IntegerField('Quantity', validators=[DataRequired(), NumberRange(min=1)], default=1, render_kw={'aria-label': 'Quantity'})
+    submit = SubmitField('Add to Cart')
+
+
+
+# Add Product Form
+class AddProductForm(FlaskForm):
+    name = StringField('Product Name', validators=[DataRequired()], render_kw={'aria-label': 'Product name'})
+    price = FloatField('Price', validators=[DataRequired(), NumberRange(min=0.01)], render_kw={'aria-label': 'Price'})
+    description = TextAreaField('Description', render_kw={'aria-label': 'Description'})
+    category = SelectField('Category', choices=[('puja', 'Puja Items'), ('saree', 'Sarees'), ('other', 'Other')], render_kw={'aria-label': 'Category'})
+    submit = SubmitField('Add Product')
 
 # Signup Form
 class SignupForm(FlaskForm):
@@ -217,11 +240,12 @@ def signup():
 def admin():
     if not current_user.is_admin:
         return redirect(url_for('index'))
-    if request.method == 'POST':
-        name = escape(request.form['name'])
-        price = float(request.form['price'])
-        description = escape(request.form['description'])
-        category = escape(request.form['category'])
+    form = AddProductForm()
+    if request.method == 'POST' and form.validate_on_submit():
+        name = escape(form.name.data)
+        price = form.price.data
+        description = escape(form.description.data)
+        category = form.category.data
         image = request.files['image']
         filename = None
         if image and image.filename:
@@ -231,13 +255,14 @@ def admin():
             img = Image.open(image)
             img.thumbnail((800, 800))
             img.save(filepath, quality=85)
-            filename = os.path.join('static/uploads', filename)
+            filename = os.path.join('uploads', filename)  # Store relative path
         product = Product(name=name, price=price, description=description, image=filename, category=category)
         db.session.add(product)
         db.session.commit()
+        flash('Product added successfully')
         return redirect(url_for('admin'))
     products = Product.query.all()
-    return render_template('admin.html', products=products)
+    return render_template('admin.html', products=products, form=form)
 
 @app.route('/admin/discounts', methods=['GET', 'POST'])
 @login_required
@@ -263,26 +288,32 @@ def admin_discounts():
 @app.route('/product/<int:id>')
 def product(id):
     product = Product.query.get_or_404(id)
-    return render_template('product.html', product=product)
+    form = CartForm(product_id=id)
+    return render_template('product.html', product=product, form=form)
 
 @app.route('/cart', methods=['GET', 'POST'])
 @login_required
 def cart():
+    form = CartUpdateForm()
     if request.method == 'POST':
-        product_id = request.form.get('product_id')
-        quantity = int(request.form.get('quantity', 1))
-        cart_item = CartItem.query.filter_by(user_id=current_user.id, product_id=product_id).first()
-        if cart_item:
-            cart_item.quantity += quantity
+        if form.validate_on_submit():
+            product_id = form.product_id.data
+            quantity = form.quantity.data
+            cart_item = CartItem.query.filter_by(user_id=current_user.id, product_id=product_id).first()
+            if cart_item:
+                cart_item.quantity = quantity
+            else:
+                cart_item = CartItem(user_id=current_user.id, product_id=product_id, quantity=quantity)
+                db.session.add(cart_item)
+            db.session.commit()
+            flash('Cart updated successfully')
         else:
-            cart_item = CartItem(user_id=current_user.id, product_id=product_id, quantity=quantity)
-            db.session.add(cart_item)
-        db.session.commit()
-        flash('Item added to cart')
+            flash('Invalid form data. Please check your input.')
         return redirect(url_for('cart'))
     cart_items = CartItem.query.filter_by(user_id=current_user.id).all()
     total = sum(item.product.price * item.quantity for item in cart_items)
-    return render_template('cart.html', cart_items=cart_items, total=total)
+    return render_template('cart.html', cart_items=cart_items, total=total, form=form)
+
 
 @app.route('/cart/remove/<int:cart_item_id>', methods=['POST'])
 @login_required

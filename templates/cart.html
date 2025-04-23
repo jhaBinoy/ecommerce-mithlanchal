@@ -1,11 +1,12 @@
 {% extends "base.html" %}
+{% block title %}Cart{% endblock %}
 {% block content %}
-<div class="container mt-5">
-    <h2>Your Cart</h2>
+<div class="container my-5">
+    <h1>Your Cart</h1>
     {% with messages = get_flashed_messages() %}
         {% if messages %}
             {% for message in messages %}
-                <div class="alert alert-info">{{ message }}</div>
+                <div class="alert alert-warning">{{ message }}</div>
             {% endfor %}
         {% endif %}
     {% endwith %}
@@ -25,18 +26,25 @@
                     <tr>
                         <td>{{ item.product.name }}</td>
                         <td>₹{{ item.product.price }}</td>
-                        <td>{{ item.quantity }}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('cart') }}" class="d-inline">
+                                {{ form.csrf_token }}
+                                <input type="hidden" name="product_id" value="{{ item.product_id }}">
+                                <input type="number" name="quantity" value="{{ item.quantity }}" min="1" class="form-control w-50 d-inline" aria-label="Quantity">
+                                <button type="submit" class="btn btn-sm btn-primary">Update</button>
+                            </form>
+                        </td>
                         <td>₹{{ item.product.price * item.quantity }}</td>
                         <td>
-                            <form method="post" action="{{ url_for('increase_cart_item', cart_item_id=item.id) }}">
+                            <form method="POST" action="{{ url_for('increase_cart_item', cart_item_id=item.id) }}" class="d-inline">
                                 {{ form.csrf_token }}
-                                <button type="submit" class="btn btn-sm btn-primary">+</button>
+                                <button type="submit" class="btn btn-sm btn-success">+</button>
                             </form>
-                            <form method="post" action="{{ url_for('decrease_cart_item', cart_item_id=item.id) }}">
+                            <form method="POST" action="{{ url_for('decrease_cart_item', cart_item_id=item.id) }}" class="d-inline">
                                 {{ form.csrf_token }}
-                                <button type="submit" class="btn btn-sm btn-primary">-</button>
+                                <button type="submit" class="btn btn-sm btn-warning">-</button>
                             </form>
-                            <form method="post" action="{{ url_for('remove_from_cart', cart_item_id=item.id) }}">
+                            <form method="POST" action="{{ url_for('remove_from_cart', cart_item_id=item.id) }}" class="d-inline">
                                 {{ form.csrf_token }}
                                 <button type="submit" class="btn btn-sm btn-danger">Remove</button>
                             </form>
@@ -50,5 +58,19 @@
     {% else %}
         <p>Your cart is empty.</p>
     {% endif %}
+    <!--Start of Tawk.to Script-->
+    <script type="text/javascript">
+        var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
+        (function(){
+        var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
+        s1.async=true;
+        s1.src='https://embed.tawk.to/68024700c5a0bc1911588f2e/1ip4eanet';
+        s1.charset='UTF-8';
+        s1.setAttribute('crossorigin','*');
+        s0.parentNode.insertBefore(s1,s0);
+        })();
+    </script>
+    <!--End of Tawk.to Script-->
 </div>
 {% endblock %}
+</xArtifact>
