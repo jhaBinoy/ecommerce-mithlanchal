@@ -1,0 +1,8 @@
+load database
+    from sqlite:///Users/b0j02h7/Documents/ecommerce/store.db
+    into pgsql://admin:gv64uAaltfP9OVOVvlNtt6dnC31PXqZR@dpg-d01bdjre5dus73e3bptg-a.oregon-postgres.render.com:5432/store_lt18
+with include drop, create tables, create indexes, reset sequences
+set work_mem to '16MB', maintenance_work_mem to '512 MB'
+SET client_encoding to 'UTF8',
+    sslmode to 'require',
+    ssl_min_protocol_version to 'TLSv1.2';
