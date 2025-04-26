@@ -30,6 +30,7 @@ from wtforms.validators import DataRequired, Email, Length,NumberRange
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24).hex()
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', f"sqlite:///{os.path.join(os.getcwd(), 'store.db')}")
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://admin:gv64uAaltfP9OVOVvlNtt6dnC31PXqZR@dpg-d01bdjre5dus73e3bptg-a.oregon-postgres.render.com/store_lt18?sslmode=require'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
@@ -87,11 +88,12 @@ class LoginForm(FlaskForm):
 
 # Models
 class User(UserMixin, db.Model):
+    __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(100), unique=True, nullable=False)
-    password = db.Column(db.String(100), nullable=False)
+    password = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
-    mobile_number = db.Column(db.String(15), unique=True, nullable=True)
+    mobile_number = db.Column(db.String(15), unique=True)
 
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -160,14 +162,12 @@ with app.app_context():
     try:
         db.create_all()
         if not User.query.filter_by(email='admin@themithlanchal.com').first():
-            admin = User(
-                email='admin@themithlanchal.com',
-                password=generate_password_hash('admin123'),
-                is_admin=True,
-                mobile_number='+919876543210'
-            )
+            admin = User(email='admin@themithlanchal.com', 
+                         password=generate_password_hash('admin123'),
+                           is_admin=True, mobile_number='+919876543210')
             db.session.add(admin)
             db.session.commit()
+            
             app.logger.info("Admin user 'admin@themithlanchal.com' created")
         app.logger.info("Database tables created successfully")
     except Exception as e:
