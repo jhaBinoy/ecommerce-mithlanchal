@@ -1,7 +1,8 @@
+
 import os
 import uuid
 import re
-from flask import Flask, render_template, request, redirect, url_for, flash, Response, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, Response, jsonify, session
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_mail import Mail, Message
 from flask_wtf import FlaskForm
@@ -12,7 +13,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from markupsafe import escape
 from PIL import Image
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import razorpay
 from reportlab.lib.pagesizes import letter
@@ -20,7 +21,7 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from io import BytesIO
-from db import db  # Import db from db.py
+from db import db
 from flask import Flask
 from flask_wtf import CSRFProtect
 from sqlalchemy.orm import joinedload
@@ -36,17 +37,26 @@ app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'your-email@gmail.com')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD', 'your-app-password')
 app.config['MAIL_DEFAULT_SENDER'] = 'The Mithlanchal <your-email@gmail.com>'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)
+app.config['SESSION_COOKIE_SECURE'] = False if os.getenv('FLASK_DEBUG', 'True') == 'True' else True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+# Initialize logging
+import logging
+logging.basicConfig(level=logging.DEBUG)
+app.logger.setLevel(logging.DEBUG)
+
 # Initialize extensions
-db.init_app(app)  # Initialize db with Flask app
+db.init_app(app)
 mail = Mail(app)
 csrf = CSRFProtect(app)
 
 load_dotenv()
 razorpay_client = razorpay.Client(auth=(os.getenv('RAZORPAY_KEY', ''), os.getenv('RAZORPAY_SECRET', '')))
 
-# Import models after db initialization to avoid circular imports
+# Import models after db initialization
 from models import User, Product, DiscountCode, CartItem, Order, OrderItem
 
 # Cart Update Form
@@ -92,6 +102,12 @@ class CheckoutForm(FlaskForm):
     payment_method = SelectField('Payment Method', choices=[('cod', 'Cash on Delivery'), ('razorpay', 'Online Payment (Razorpay)')], validators=[DataRequired()], render_kw={'aria-label': 'Payment method'})
     submit = SubmitField('Place Order')
 
+# Profile Update Form
+class ProfileForm(FlaskForm):
+    mobile_number = StringField('Mobile Number', validators=[Length(min=7, max=12)], render_kw={'aria-label': 'Mobile number', 'pattern': '[0-9]{7,12}', 'title': 'Enter 7-12 digits'})
+    country_code = SelectField('Country Code', choices=[('+91', 'India (+91)'), ('+1', 'USA (+1)'), ('+44', 'UK (+44)'), ('+61', 'Australia (+61)')], default='+91', render_kw={'aria-label': 'Country code'})
+    submit = SubmitField('Update Profile')
+
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -112,6 +128,7 @@ def init_db():
     with app.app_context():
         try:
             db.create_all()
+            # Create admin user if it doesn't exist
             if not db.session.query(User).filter_by(email='admin@themithlanchal.com').first():
                 admin = User(email='admin@themithlanchal.com', 
                              password=generate_password_hash('admin123'),
@@ -263,6 +280,7 @@ def admin_discounts():
 def product(id):
     with app.app_context():
         product = db.session.query(Product).get_or_404(id)
+    session.modified = True
     form = CartForm(product_id=id)
     return render_template('product.html', product=product, form=form)
 
@@ -273,6 +291,8 @@ def cart():
     if request.method == 'POST':
         # Handle "Add to Cart" form submission (from product.html)
         add_to_cart_form = CartForm(request.form)
+        app.logger.debug(f"Add to cart form data: {request.form}")
+        app.logger.debug(f"Session data: {session}")
         if add_to_cart_form.validate_on_submit():
             product_id = add_to_cart_form.product_id.data
             quantity = add_to_cart_form.quantity.data
@@ -284,7 +304,7 @@ def cart():
                     cart_item = CartItem(user_id=current_user.id, product_id=product_id, quantity=quantity)
                     db.session.add(cart_item)
                 db.session.commit()
-            flash('Item added to cart successfully')
+            flash('Item added to cart successfully', 'success')
             return redirect(url_for('cart'))
         # Handle "Update Cart" form submission (from cart.html)
         if form.validate_on_submit():
@@ -298,14 +318,17 @@ def cart():
                     cart_item = CartItem(user_id=current_user.id, product_id=product_id, quantity=quantity)
                     db.session.add(cart_item)
                 db.session.commit()
-            flash('Cart updated successfully')
+            flash('Cart updated successfully', 'success')
             return redirect(url_for('cart'))
-        # If neither form validates, flash the appropriate error
+        # If validation fails, flash the appropriate error
         if add_to_cart_form.errors:
-            flash('Add to cart failed. Please check your input.')
+            error_message = 'Add to cart failed. Please check your input.'
+            if 'csrf_token' in add_to_cart_form.errors:
+                error_message = 'Session expired or invalid. Please refresh the page and try again.'
+            flash(error_message, 'danger')
             app.logger.debug(f"Add to cart form errors: {add_to_cart_form.errors}")
-        if form.errors:
-            flash('Cart update failed. Please check your input.')
+        elif form.errors:
+            flash('Cart update failed. Please check your input.', 'danger')
             app.logger.debug(f"Update cart form errors: {form.errors}")
         return redirect(url_for('cart'))
     with app.app_context():
@@ -540,6 +563,37 @@ The Mithlanchal Team
         except Exception as e:
             flash(f'Payment verification failed: {str(e)}')
             return redirect(url_for('checkout'))
+
+@app.route('/orders')
+@login_required
+def orders():
+    with app.app_context():
+        user_orders = db.session.query(Order).filter_by(user_id=current_user.id).order_by(Order.id.desc()).all()
+    return render_template('orders.html', orders=user_orders)
+
+@app.route('/account', methods=['GET', 'POST'])
+@login_required
+def account():
+    form = ProfileForm()
+    if request.method == 'POST':
+        if form.validate_on_submit():
+            country_code = form.country_code.data
+            mobile_number = escape(form.mobile_number.data)
+            full_mobile = f"{country_code}{mobile_number}" if mobile_number and country_code else None
+            with app.app_context():
+                if full_mobile and not re.match(r'\+[0-9]{10,15}', full_mobile):
+                    flash('Invalid mobile number format', 'danger')
+                elif full_mobile and db.session.query(User).filter(User.id != current_user.id, User.mobile_number == full_mobile).first():
+                    flash('Mobile number already registered by another user', 'danger')
+                else:
+                    current_user.mobile_number = full_mobile
+                    db.session.commit()
+                    flash('Profile updated successfully', 'success')
+                    return redirect(url_for('account'))
+        else:
+            flash('Form validation failed. Please check your input.', 'danger')
+            app.logger.debug(f"Profile form errors: {form.errors}")
+    return render_template('account.html', form=form)
 
 @app.route('/order/<int:order_id>')
 @login_required

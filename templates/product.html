@@ -1,41 +1,44 @@
-{% extends "base.html" %}
-{% block title %}Product - {{ product.name }}{% endblock %}
+{% extends 'base.html' %}
+
+{% block title %}{{ product.name }} - The Mithlanchal{% endblock %}
+
 {% block content %}
 <div class="container mt-5">
     <div class="row">
         <div class="col-md-6">
             {% if product.image %}
-                <img src="{{ url_for('static', filename=product.image | replace('static/', '')) }}" alt="{{ product.name }}" class="img-fluid" style="max-width: 300px;">
+                <img src="{{ url_for('static', filename=product.image) }}" class="img-fluid" alt="{{ product.name }}">
             {% else %}
-                <img src="{{ url_for('static', filename='images/placeholder.jpg') }}" alt="Placeholder" class="img-fluid" style="max-width: 300px;">
+                <img src="{{ url_for('static', filename='images/placeholder.jpg') }}" class="img-fluid" alt="Placeholder">
             {% endif %}
         </div>
         <div class="col-md-6">
-            <h2>{{ product.name }}</h2>
-            <p>{{ product.description }}</p>
-            <h4>₹{{ product.price }} (incl. GST)</h4>
-            <!--Start of Tawk.to Script-->
-            <script type="text/javascript">
-                var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
-                (function(){
-                var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
-                s1.async=true;
-                s1.src='https://embed.tawk.to/68024700c5a0bc1911588f2e/1ip4eanet';
-                s1.charset='UTF-8';
-                s1.setAttribute('crossorigin','*');
-                s0.parentNode.insertBefore(s1,s0);
-                })();
-            </script>
-            <!--End of Tawk.to Script-->
-            <form method="post" action="{{ url_for('cart') }}">
-                {{ form.hidden_tag() }}
-                <div class="form-group">
-                    <label for="quantity">Quantity:</label>
-                    {{ form.quantity(class="form-control w-25", min="1", aria_label="Quantity") }}
+            <h1>{{ product.name }}</h1>
+            <p><strong>Price:</strong> ₹{{ product.price }}</p>
+            <p><strong>Category:</strong> {{ product.category }}</p>
+            <p><strong>Description:</strong> {{ product.description or 'No description available.' }}</p>
+            <form method="POST" action="{{ url_for('cart') }}" id="add-to-cart-form">
+                {{ form.hidden_tag() }} <!-- Use hidden_tag to ensure CSRF token is included -->
+                {{ form.product_id }}
+                <div class="mb-3">
+                    {{ form.quantity.label }}
+                    {{ form.quantity(class="form-control") }}
+                    {% if form.quantity.errors %}
+                        {% for error in form.quantity.errors %}
+                            <span class="text-danger">{{ error }}</span>
+                        {% endfor %}
+                    {% endif %}
                 </div>
-                {{ form.submit(class="btn btn-primary mt-3") }}
+                {{ form.submit(class="btn btn-primary", id="add-to-cart-btn") }}
             </form>
         </div>
     </div>
 </div>
+
+<script>
+    document.getElementById('add-to-cart-form').onsubmit = function() {
+        document.getElementById('add-to-cart-btn').disabled = true;
+        document.getElementById('add-to-cart-btn').innerText = 'Adding...';
+    };
+</script>
 {% endblock %}

@@ -1,79 +1,77 @@
 {% extends 'base.html' %}
-{% block title %}Home{% endblock %}
-{% block content %}
-<header class="bg-light py-5">
-    <div class="container text-center">
-        <h1>Welcome to The Mithlanchal</h1>
-        <p class="lead">Discover our exclusive range of products!</p>
-    </div>
-</header>
-<!--Start of Tawk.to Script-->
-<script type="text/javascript">
-    var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
-    (function(){
-    var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
-    s1.async=true;
-    s1.src='https://embed.tawk.to/68024700c5a0bc1911588f2e/1ip4eanet';
-    s1.charset='UTF-8';
-    s1.setAttribute('crossorigin','*');
-    s0.parentNode.insertBefore(s1,s0);
-    })();
-    </script>
-    <!--End of Tawk.to Script-->
-<form method="GET" class="mb-4">
-    <div class="row">
-        <div class="col-md-4">
-            <input type="text" name="query" class="form-control" placeholder="Search products..." value="{{ request.args.get('query', '') }}">
-        </div>
-        <div class="col-md-3">
-            <select name="category" class="form-select">
-                <option value="">All Categories</option>
-                {% for cat in categories %}
-                    <option value="{{ cat }}" {% if cat == request.args.get('category') %}selected{% endif %}>{{ cat|title }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-2">
-            <input type="number" name="min_price" class="form-control" placeholder="Min Price" value="{{ request.args.get('min_price', '') }}">
-        </div>
-        <div class="col-md-2">
-            <input type="number" name="max_price" class="form-control" placeholder="Max Price" value="{{ request.args.get('max_price', '') }}">
-        </div>
-        <div class="col-md-1">
-            <button type="submit" class="btn btn-primary">Filter</button>
-        </div>
-    </div>
-</form>
 
-<div class="row">
-    {% for product in products %}
-        <div class="col-md-4 mb-4">
-            <div class="card h-100 shadow-sm">
-                {% if product.image %}
-                    <img src="{{ url_for('static', filename=product.image) }}" class="card-img-top" alt="{{ product.name }}" style="height: 200px; object-fit: cover;">
-                {% else %}
-                    <img src="{{ url_for('static', filename='images/placeholder.jpg') }}" class="card-img-top" alt="Placeholder" style="height: 200px; object-fit: cover;">
-                {% endif %}
-                <div class="card-body">
-                    <h5 class="card-title">{{ product.name }}</h5>
-                    <p class="card-text text-muted">{{ product.description|truncate(100) }}</p>
-                    <p class="card-text"><strong>₹{{ product.price }}</strong></p>
-                    <a href="{{ url_for('product', id=product.id) }}" class="btn btn-outline-primary">View Product</a>
-                    {% if current_user.is_authenticated %}
-                        <form method="POST" action="{{ url_for('cart') }}" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="product_id" value="{{ product.id }}">
-                            <input type="hidden" name="quantity" value="1">
-                            <button type="submit" class="btn btn-success ms-2">Add to Cart</button>
-                        </form>
-                    {% endif %}
-                </div>
+{% block title %}The Mithlanchal - Home{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Welcome to The Mithlanchal</h1>
+
+    <!-- Search and Filter Form -->
+    <form method="GET" action="{{ url_for('index') }}" class="mb-4">
+        <div class="row">
+            <div class="col-md-3">
+                <input type="text" name="query" class="form-control" placeholder="Search products..." value="{{ request.args.get('query', '') }}" aria-label="Search products">
+            </div>
+            <div class="col-md-3">
+                <select name="category" class="form-select" aria-label="Category">
+                    <option value="">All Categories</option>
+                    {% for category in categories %}
+                        <option value="{{ category }}" {% if request.args.get('category') == category %}selected{% endif %}>{{ category }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <input type="number" name="min_price" class="form-control" placeholder="Min Price" value="{{ request.args.get('min_price', '') }}" step="0.01" aria-label="Minimum price">
+            </div>
+            <div class="col-md-2">
+                <input type="number" name="max_price" class="form-control" placeholder="Max Price" value="{{ request.args.get('max_price', '') }}" step="0.01" aria-label="Maximum price">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Filter</button>
             </div>
         </div>
-    {% else %}
-        <div class="col-12 text-center">
-            <p class="text-muted">No products available yet.</p>
-        </div>
-    {% endfor %}
+    </form>
+
+    <!-- Product Listing -->
+    <div class="row">
+        {% if products %}
+            {% for product in products %}
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100">
+                        {% if product.image %}
+                            <img src="{{ url_for('static', filename=product.image) }}" class="card-img-top" alt="{{ product.name }}">
+                        {% else %}
+                            <img src="{{ url_for('static', filename='images/placeholder.jpg') }}" class="card-img-top" alt="Placeholder">
+                        {% endif %}
+                        <div class="card-body">
+                            <h5 class="card-title">{{ product.name }}</h5>
+                            <p class="card-text">₹{{ product.price }}</p>
+                            <p class="card-text">{{ product.description|truncate(100) }}</p>
+                            <a href="{{ url_for('product', id=product.id) }}" class="btn btn-outline-primary">View Product</a>
+                            {% if current_user.is_authenticated %}
+                                <form method="POST" action="{{ url_for('cart') }}" class="d-inline" id="add-to-cart-form-{{ product.id }}">
+                                    {{ form.csrf_token if form else '' }}
+                                    <input type="hidden" name="product_id" value="{{ product.id }}">
+                                    <input type="hidden" name="quantity" value="1">
+                                    <button type="submit" class="btn btn-primary mt-2" id="add-to-cart-btn-{{ product.id }}">Add to Cart</button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>No products found.</p>
+        {% endif %}
+    </div>
 </div>
+
+<script>
+    {% for product in products %}
+        document.getElementById('add-to-cart-form-{{ product.id }}').onsubmit = function() {
+            document.getElementById('add-to-cart-btn-{{ product.id }}').disabled = true;
+            document.getElementById('add-to-cart-btn-{{ product.id }}').innerText = 'Adding...';
+        };
+    {% endfor %}
+</script>
 {% endblock %}
