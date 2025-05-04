@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Checkout{% endblock %}
+{% block title %}Checkout - The Mithlanchal{% endblock %}
 {% block content %}
-<div class="container my-5">
+<div class="container mt-5">
     <h1>Checkout</h1>
     {% with messages = get_flashed_messages() %}
         {% if messages %}
@@ -10,9 +10,73 @@
             {% endfor %}
         {% endif %}
     {% endwith %}
-    {% if cart_items %}
-        <h3>Order Summary</h3>
-        <table class="table">
+    {% if order %}
+        <h2>Complete Payment</h2>
+        <div class="alert alert-info">
+            Total Amount: ₹{{ total }}
+            {% if discount > 0 %}
+                <br>Discount Applied: ₹{{ discount }}
+            {% endif %}
+        </div>
+        <form id="razorpay-form">
+            <input type="hidden" name="db_order_id" value="{{ db_order_id }}">
+            <script
+                src="https://checkout.razorpay.com/v1/checkout.js"
+                data-key="{{ razorpay_key }}"
+                data-amount="{{ order.amount }}"
+                data-currency="INR"
+                data-order_id="{{ order.id }}"
+                data-buttontext="Pay Now"
+                data-name="The Mithlanchal"
+                data-description="Order #{{ db_order_id }}"
+                data-prefill.email="{{ user_email }}"
+                data-theme.color="#F37254">
+            </script>
+        </form>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const options = {
+                    key: '{{ razorpay_key }}',
+                    amount: {{ order.amount }},
+                    currency: 'INR',
+                    order_id: '{{ order.id }}',
+                    name: 'The Mithlanchal',
+                    description: 'Order #{{ db_order_id }}',
+                    prefill: {
+                        email: '{{ user_email }}'
+                    },
+                    theme: {
+                        color: '#F37254'
+                    },
+                    handler: function(response) {
+                        const form = document.createElement('form');
+                        form.method = 'POST';
+                        form.action = '{{ url_for("payment_success") }}';
+                        const inputs = [
+                            { name: 'razorpay_payment_id', value: response.razorpay_payment_id },
+                            { name: 'razorpay_order_id', value: response.razorpay_order_id },
+                            { name: 'razorpay_signature', value: response.razorpay_signature },
+                            { name: 'db_order_id', value: '{{ db_order_id }}' },
+                            { name: 'csrf_token', value: '{{ csrf_token() }}' }
+                        ];
+                        inputs.forEach(input => {
+                            const elem = document.createElement('input');
+                            elem.type = 'hidden';
+                            elem.name = input.name;
+                            elem.value = input.value;
+                            form.appendChild(elem);
+                        });
+                        document.body.appendChild(form);
+                        form.submit();
+                    }
+                };
+                const rzp = new Razorpay(options);
+                rzp.open();
+            });
+        </script>
+    {% else %}
+        <h2>Your Order</h2>
+        <table class="table table-bordered">
             <thead>
                 <tr>
                     <th>Product</th>
@@ -27,96 +91,54 @@
                         <td>{{ item.product.name }}</td>
                         <td>₹{{ item.product.price }}</td>
                         <td>{{ item.quantity }}</td>
-                        <td>₹{{ item.product.price * item.quantity }}</td>
+                        <td>₹{{ (item.product.price * item.quantity)|round(2) }}</td>
                     </tr>
                 {% endfor %}
             </tbody>
         </table>
+        <p><strong>Subtotal:</strong> ₹{{ (total + discount)|round(2) }}</p>
         {% if discount > 0 %}
-            <p>Discount: ₹{{ discount }}</p>
+            <p><strong>Discount:</strong> ₹{{ discount|round(2) }}</p>
         {% endif %}
-        <h3>Total: ₹{{ total }}</h3>
-        {% if order %}
-            <h3>Complete Payment</h3>
-            <p>Total: ₹{{ total }}</p>
-            <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-            <script>
-                var options = {
-                    "key": "{{ razorpay_key }}",
-                    "amount": "{{ order.amount }}",
-                    "currency": "{{ order.currency }}",
-                    "name": "The Mithlanchal",
-                    "description": "Order #{{ order.receipt }}",
-                    "order_id": "{{ order.id }}",
-                    "handler": function (response) {
-                        var form = document.createElement("form");
-                        form.method = "POST";
-                        form.action = "{{ url_for('payment_success') }}";
-                        var payment_id = document.createElement("input");
-                        payment_id.type = "hidden";
-                        payment_id.name = "razorpay_payment_id";
-                        payment_id.value = response.razorpay_payment_id;
-                        var order_id = document.createElement("input");
-                        order_id.type = "hidden";
-                        order_id.name = "razorpay_order_id";
-                        order_id.value = response.razorpay_order_id;
-                        var signature = document.createElement("input");
-                        signature.type = "hidden";
-                        signature.name = "razorpay_signature";
-                        signature.value = response.razorpay_signature;
-                        var db_order_id = document.createElement("input");
-                        db_order_id.type = "hidden";
-                        db_order_id.name = "db_order_id";
-                        db_order_id.value = "{{ db_order_id }}";
-                        form.appendChild(payment_id);
-                        form.appendChild(order_id);
-                        form.appendChild(signature);
-                        form.appendChild(db_order_id);
-                        document.body.appendChild(form);
-                        form.submit();
-                    },
-                    "prefill": {
-                        "email": "{{ user_email }}",
-                        "contact": "{{ current_user.mobile_number or '' }}"
-                    },
-                    "theme": {
-                        "color": "#d4a373"
-                    }
-                };
-                var rzp1 = new Razorpay(options);
-                rzp1.open();
-            </script>
-        {% else %}
-            <form method="post" action="{{ url_for('checkout') }}">
-                {{ form.csrf_token }}
-                <div class="mb-3">
-                    <label for="shipping_address" class="form-label">Shipping Address</label>
-                    <textarea name="shipping_address" id="shipping_address" class="form-control" required aria-label="Shipping address">{{ form.shipping_address.data or '' }}</textarea>
-                </div>
-                <div class="mb-3">
-                    <label for="mobile_number" class="form-label">Mobile Number</label>
-                    <input type="tel" name="mobile_number" id="mobile_number" class="form-control" required value="{{ form.mobile_number.data or current_user.mobile_number or '' }}" aria-label="Mobile number">
-                </div>
-                <div class="mb-3">
-                    <label for="email" class="form-label">Email</label>
-                    <input type="email" name="email" id="email" class="form-control" required value="{{ form.email.data or user_email }}" aria-label="Email address">
-                </div>
-                <div class="mb-3">
-                    <label for="payment_method" class="form-label">Payment Method</label>
-                    <select name="payment_method" id="payment_method" class="form-control" required aria-label="Payment method">
-                        <option value="cod" {% if form.payment_method.data == 'cod' %}selected{% endif %}>Cash on Delivery</option>
-                        <option value="razorpay" {% if form.payment_method.data == 'razorpay' %}selected{% endif %}>Online Payment</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label for="discount_code" class="form-label">Discount Code</label>
-                    <input type="text" name="discount_code" id="discount_code" class="form-control" value="{{ form.discount_code.data or '' }}" aria-label="Discount code">
-                </div>
-                <button type="submit" class="btn btn-primary">Place Order</button>
-            </form>
-        {% endif %}
-    {% else %}
-        <p>Your cart is empty.</p>
+        <p><strong>Total:</strong> ₹{{ total|round(2) }}</p>
+
+        <h2>Shipping & Payment</h2>
+        <form method="post" action="{{ url_for('checkout') }}">
+            {{ form.hidden_tag() }}
+            <div class="mb-3">
+                <label for="shipping_address" class="form-label">Shipping Address</label>
+                {{ form.shipping_address(class="form-control", rows=3) }}
+                {% for error in form.shipping_address.errors %}
+                    <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            <div class="mb-3">
+                <label for="mobile_number" class="form-label">Mobile Number</label>
+                {{ form.mobile_number(class="form-control") }}
+                {% for error in form.mobile_number.errors %}
+                    <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            <div class="mb-3">
+                <label for="email" class="form-label">Email</label>
+                {{ form.email(class="form-control", value=user_email) }}
+                {% for error in form.email.errors %}
+                    <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            <div class="mb-3">
+                <label for="discount_code" class="form-label">Discount Code (Optional)</label>
+                {{ form.discount_code(class="form-control") }}
+            </div>
+            <div class="mb-3">
+                <label for="payment_method" class="form-label">Payment Method</label>
+                {{ form.payment_method(class="form-select") }}
+                {% for error in form.payment_method.errors %}
+                    <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            {{ form.submit(class="btn btn-primary") }}
+        </form>
     {% endif %}
     <!--Start of Tawk.to Script-->
     <script type="text/javascript">

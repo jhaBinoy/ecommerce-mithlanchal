@@ -28,13 +28,12 @@
             </script>
             <!--End of Tawk.to Script-->
             <form method="post" action="{{ url_for('cart') }}">
-                {{ form.csrf_token }}
-                <input type="hidden" name="product_id" value="{{ product.id }}">
+                {{ form.hidden_tag() }}
                 <div class="form-group">
                     <label for="quantity">Quantity:</label>
-                    <input type="number" name="quantity" id="quantity" value="{{ form.quantity.data or '1' }}" min="1" class="form-control w-25" aria-label="Quantity">
+                    {{ form.quantity(class="form-control w-25", min="1", aria_label="Quantity") }}
                 </div>
-                <button type="submit" class="btn btn-primary mt-3">Add to Cart</button>
+                {{ form.submit(class="btn btn-primary mt-3") }}
             </form>
         </div>
     </div>

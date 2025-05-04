@@ -1,76 +1,185 @@
-{% extends "base.html" %}
-{% block title %}Cart{% endblock %}
-{% block content %}
-<div class="container my-5">
-    <h1>Your Cart</h1>
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-warning">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-    {% if cart_items %}
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Product</th>
-                    <th>Price</th>
-                    <th>Quantity</th>
-                    <th>Total</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in cart_items %}
-                    <tr>
-                        <td>{{ item.product.name }}</td>
-                        <td>₹{{ item.product.price }}</td>
-                        <td>
-                            <form method="POST" action="{{ url_for('cart') }}" class="d-inline">
-                                {{ form.csrf_token }}
-                                <input type="hidden" name="product_id" value="{{ item.product_id }}">
-                                <input type="number" name="quantity" value="{{ item.quantity }}" min="1" class="form-control w-50 d-inline" aria-label="Quantity">
-                                <button type="submit" class="btn btn-sm btn-primary">Update</button>
-                            </form>
-                        </td>
-                        <td>₹{{ item.product.price * item.quantity }}</td>
-                        <td>
-                            <form method="POST" action="{{ url_for('increase_cart_item', cart_item_id=item.id) }}" class="d-inline">
-                                {{ form.csrf_token }}
-                                <button type="submit" class="btn btn-sm btn-success">+</button>
-                            </form>
-                            <form method="POST" action="{{ url_for('decrease_cart_item', cart_item_id=item.id) }}" class="d-inline">
-                                {{ form.csrf_token }}
-                                <button type="submit" class="btn btn-sm btn-warning">-</button>
-                            </form>
-                            <form method="POST" action="{{ url_for('remove_from_cart', cart_item_id=item.id) }}" class="d-inline">
-                                {{ form.csrf_token }}
-                                <button type="submit" class="btn btn-sm btn-danger">Remove</button>
-                            </form>
-                        </td>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Cart - The Mithlanchal</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        .flash-message {
+            transition: opacity 0.5s ease-out;
+        }
+        .flash-message.hide {
+            opacity: 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <header class="bg-red-900 text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">The Mithlanchal</h1>
+            <nav>
+                <a href="{{ url_for('index') }}" class="px-2">Home</a>
+                <a href="{{ url_for('cart') }}" class="px-2">Cart</a>
+                {% if current_user.is_authenticated %}
+                    {% if current_user.is_admin %}
+                        <a href="{{ url_for('admin') }}" class="px-2">Admin</a>
+                    {% endif %}
+                    <a href="{{ url_for('logout') }}" class="px-2">Logout</a>
+                {% else %}
+                    <a href="{{ url_for('login') }}" class="px-2">Login</a>
+                    <a href="{{ url_for('signup') }}" class="px-2">Signup</a>
+                {% endif %}
+            </nav>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4">
+        <div id="flash-messages" class="mb-4">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="flash-message bg-yellow-200 text-yellow-800 p-2 rounded mb-2 flex justify-between items-center">
+                            <span>{{ message }}</span>
+                            <button class="text-yellow-800 font-bold dismiss-btn" aria-label="Dismiss message">×</button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        <h2 class="text-2xl font-bold mb-4">Your Cart</h2>
+
+        {% if cart_items %}
+            <table class="w-full border-collapse bg-white shadow-md rounded">
+                <thead>
+                    <tr class="bg-gray-200">
+                        <th class="p-2 text-left">Product</th>
+                        <th class="p-2 text-left">Price</th>
+                        <th class="p-2 text-left">Quantity</th>
+                        <th class="p-2 text-left">Total</th>
+                        <th class="p-2 text-left">Actions</th>
                     </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <h3>Total: ₹{{ total }}</h3>
-        <a href="{{ url_for('checkout') }}" class="btn btn-primary">Proceed to Checkout</a>
-    {% else %}
-        <p>Your cart is empty.</p>
-    {% endif %}
-    <!--Start of Tawk.to Script-->
-    <script type="text/javascript">
-        var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
-        (function(){
-        var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
-        s1.async=true;
-        s1.src='https://embed.tawk.to/68024700c5a0bc1911588f2e/1ip4eanet';
-        s1.charset='UTF-8';
-        s1.setAttribute('crossorigin','*');
-        s0.parentNode.insertBefore(s1,s0);
-        })();
+                </thead>
+                <tbody>
+                    {% for item in cart_items %}
+                        <tr data-cart-item-id="{{ item.id }}" class="border-b">
+                            <td class="p-2">{{ item.product.name }}</td>
+                            <td class="p-2">₹{{ "%.1f"|format(item.product.price) }}</td>
+                            <td class="p-2 flex items-center">
+                                <span class="quantity mr-2">{{ item.quantity }}</span>
+                                <button class="increase-btn bg-green-500 text-white px-2 py-1 rounded mr-1" data-id="{{ item.id }}">+</button>
+                                <button class="decrease-btn bg-yellow-500 text-white px-2 py-1 rounded" data-id="{{ item.id }}">−</button>
+                            </td>
+                            <td class="p-2 item-total">₹{{ "%.1f"|format(item.product.price * item.quantity) }}</td>
+                            <td class="p-2 flex items-center">
+                                <form method="post" action="{{ url_for('cart') }}" class="mr-2">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="product_id" value="{{ item.product_id }}">
+                                    <input type="number" name="quantity" value="{{ item.quantity }}" class="border p-1 w-16" min="1">
+                                    <input type="submit" value="Update" class="bg-yellow-500 text-white px-2 py-1 rounded">
+                                </form>
+                                <form method="post" action="{{ url_for('remove_from_cart', cart_item_id=item.id) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="bg-red-500 text-white px-2 py-1 rounded">Remove</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <div class="mt-4">
+                <p class="text-xl font-bold">Total: ₹<span id="cart-total">{{ "%.1f"|format(total) }}</span></p>
+                <a href="{{ url_for('checkout') }}" class="bg-yellow-500 text-white px-4 py-2 rounded inline-block mt-2">Proceed to Checkout</a>
+            </div>
+        {% else %}
+            <p>Your cart is empty.</p>
+            <a href="{{ url_for('index') }}" class="bg-yellow-500 text-white px-4 py-2 rounded inline-block mt-2">Continue Shopping</a>
+        {% endif %}
+    </main>
+
+    <script>
+        $(document).ready(function() {
+            const csrfToken = $('meta[name="csrf-token"]').attr('content');
+
+            $('#flash-messages').on('click', '.dismiss-btn', function() {
+                $(this).parent().addClass('hide');
+            });
+
+            function showFlashMessage(message) {
+                const flashDiv = $('#flash-messages');
+                const messageHtml = `
+                    <div class="flash-message bg-yellow-200 text-yellow-800 p-2 rounded mb-2 flex justify-between items-center">
+                        <span>${message}</span>
+                        <button class="text-yellow-800 font-bold dismiss-btn">×</button>
+                    </div>`;
+                flashDiv.append(messageHtml);
+                setTimeout(() => {
+                    flashDiv.children().last().addClass('hide');
+                }, 3000);
+            }
+
+            $('.increase-btn').click(function() {
+                const cartItemId = $(this).data('id');
+                const row = $(`tr[data-cart-item-id="${cartItemId}"]`);
+                const quantitySpan = row.find('.quantity');
+                const itemTotalSpan = row.find('.item-total');
+
+                $.ajax({
+                    url: `/cart/increase/${cartItemId}`,
+                    type: 'POST',
+                    data: { _csrf_token: csrfToken },
+                    success: function(response) {
+                        if (response.success) {
+                            quantitySpan.text(response.quantity);
+                            itemTotalSpan.text(`₹${response.item_total.toFixed(1)}`);
+                            $('#cart-total').text(response.cart_total.toFixed(1));
+                            showFlashMessage(response.message);
+                        } else {
+                            showFlashMessage(response.error);
+                        }
+                    },
+                    error: function() {
+                        showFlashMessage('Error updating cart');
+                    }
+                });
+            });
+
+            $('.decrease-btn').click(function() {
+                const cartItemId = $(this).data('id');
+                const row = $(`tr[data-cart-item-id="${cartItemId}"]`);
+                const quantitySpan = row.find('.quantity');
+                const itemTotalSpan = row.find('.item-total');
+
+                $.ajax({
+                    url: `/cart/decrease/${cartItemId}`,
+                    type: 'POST',
+                    data: { _csrf_token: csrfToken },
+                    success: function(response) {
+                        if (response.success) {
+                            if (response.quantity === 0) {
+                                row.remove();
+                            } else {
+                                quantitySpan.text(response.quantity);
+                                itemTotalSpan.text(`₹${response.item_total.toFixed(1)}`);
+                            }
+                            $('#cart-total').text(response.cart_total.toFixed(1));
+                            showFlashMessage(response.message);
+                            if ($('tr[data-cart-item-id]').length === 0) {
+                                location.reload();
+                            }
+                        } else {
+                            showFlashMessage(response.error);
+                        }
+                    },
+                    error: function() {
+                        showFlashMessage('Error updating cart');
+                    }
+                });
+            });
+        });
     </script>
-    <!--End of Tawk.to Script-->
-</div>
-{% endblock %}
-</xArtifact>
+</body>
+</html>

@@ -1,50 +1,57 @@
 {% extends 'base.html' %}
-{% block title %}Order Confirmation{% endblock %}
+{% block title %}Order Confirmation - The Mithlanchal{% endblock %}
 {% block content %}
-<div class="container my-5">
-    <h1>Order Confirmed</h1>
-    <p>Thank you for your order! Your order details are below:</p>
-    <h3>Order #{{ order.id }}</h3>
-    <p><strong>Date:</strong> {{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
-    <p><strong>Shipping Address:</strong> {{ order.shipping_address }}</p>
-    <p><strong>Mobile:</strong> {{ order.mobile_number }}</p>
-    <p><strong>Email:</strong> {{ order.email }}</p>
+<div class="container mt-5">
+    <h1>Order Confirmation</h1>
+    <p>Thank you for your order! Here are the details:</p>
+    <p><strong>Order #:</strong> {{ order.id }}</p>
+    <p><strong>Date:</strong> {{ order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else 'Not available' }}</p>
+    <p><strong>Total:</strong> ₹{{ order.total|round(2) }}</p>
+    {% if order.discount_applied > 0 %}
+        <p><strong>Discount Applied:</strong> ₹{{ order.discount_applied|round(2) }}</p>
+    {% endif %}
     <p><strong>Payment Method:</strong> {{ order.payment_method.title() }}</p>
     {% if order.payment_id %}
         <p><strong>Payment ID:</strong> {{ order.payment_id }}</p>
     {% endif %}
-    <h4>Items</h4>
+    <p><strong>Shipping Address:</strong> {{ order.shipping_address }}</p>
+    <p><strong>Mobile Number:</strong> {{ order.mobile_number }}</p>
+    <p><strong>Email:</strong> {{ order.email }}</p>
+    <h2>Items</h2>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Price</th>
+                <th>Quantity</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in order.order_items %}
+                <tr>
+                    <td>{{ item.product.name }}</td>
+                    <td>₹{{ item.price|round(2) }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>₹{{ (item.price * item.quantity)|round(2) }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <a href="{{ url_for('generate_invoice', order_id=order.id) }}" class="btn btn-primary">Download Invoice</a>
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">Continue Shopping</a>
     <!--Start of Tawk.to Script-->
-<script type="text/javascript">
-    var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
-    (function(){
-    var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
-    s1.async=true;
-    s1.src='https://embed.tawk.to/68024700c5a0bc1911588f2e/1ip4eanet';
-    s1.charset='UTF-8';
-    s1.setAttribute('crossorigin','*');
-    s0.parentNode.insertBefore(s1,s0);
-    })();
+    <script type="text/javascript">
+        var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
+        (function(){
+        var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
+        s1.async=true;
+        s1.src='https://embed.tawk.to/68024700c5a0bc1911588f2e/1ip4eanet';
+        s1.charset='UTF-8';
+        s1.setAttribute('crossorigin','*');
+        s0.parentNode.insertBefore(s1,s0);
+        })();
     </script>
     <!--End of Tawk.to Script-->
-    <ul class="list-group mb-3">
-        {% for item in order.items %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                {{ item.product.name }} (x{{ item.quantity }})
-                <span>₹{{ item.price * item.quantity }}</span>
-            </li>
-        {% endfor %}
-        {% if order.discount_applied > 0 %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                Discount
-                <span>-₹{{ order.discount_applied }}</span>
-            </li>
-        {% endif %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-            Total
-            <span>₹{{ order.total }}</span>
-        </li>
-    </ul>
-    <a href="{{ url_for('generate_invoice', order_id=order.id) }}" class="btn btn-primary">Download Invoice</a>
 </div>
 {% endblock %}

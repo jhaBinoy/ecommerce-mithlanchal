@@ -61,7 +61,9 @@
                     <a href="{{ url_for('product', id=product.id) }}" class="btn btn-outline-primary">View Product</a>
                     {% if current_user.is_authenticated %}
                         <form method="POST" action="{{ url_for('cart') }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="product_id" value="{{ product.id }}">
+                            <input type="hidden" name="quantity" value="1">
                             <button type="submit" class="btn btn-success ms-2">Add to Cart</button>
                         </form>
                     {% endif %}

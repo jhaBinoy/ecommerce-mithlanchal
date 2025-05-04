@@ -12,6 +12,7 @@
     {% endwith %}
     <form method="POST" action="{{ url_for('login') }}">
         {{ form.csrf_token }}
+        <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
         <div class="mb-3">
             <label for="email" class="form-label">Email</label>
             <input type="email" class="form-control" id="email" name="email" required value="{{ form.email.data or '' }}" aria-label="Email address">
