@@ -67,6 +67,7 @@
 </div>
 
 <script>
+    
     {% for product in products %}
         document.getElementById('add-to-cart-form-{{ product.id }}').onsubmit = function() {
             document.getElementById('add-to-cart-btn-{{ product.id }}').disabled = true;

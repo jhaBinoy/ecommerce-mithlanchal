@@ -1,4 +1,3 @@
-
 import os
 import uuid
 import re
@@ -7,7 +6,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from flask_mail import Mail, Message
 from flask_wtf import FlaskForm
 from flask_wtf.csrf import CSRFProtect
-from wtforms import StringField, PasswordField, SelectField, SubmitField, TextAreaField, FloatField, IntegerField
+from wtforms import StringField, PasswordField, SelectField, SubmitField, TextAreaField, FloatField, IntegerField, DateField
 from wtforms.validators import DataRequired, Email, Length, NumberRange
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
@@ -25,6 +24,9 @@ from db import db
 from flask import Flask
 from flask_wtf import CSRFProtect
 from sqlalchemy.orm import joinedload
+from sqlalchemy.sql import text
+from flask_migrate import Migrate
+
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', os.urandom(24).hex())
@@ -58,6 +60,7 @@ razorpay_client = razorpay.Client(auth=(os.getenv('RAZORPAY_KEY', ''), os.getenv
 
 # Import models after db initialization
 from models import User, Product, DiscountCode, CartItem, Order, OrderItem
+migrate = Migrate(app, db)
 
 # Cart Update Form
 class CartUpdateForm(FlaskForm):
@@ -108,6 +111,13 @@ class ProfileForm(FlaskForm):
     country_code = SelectField('Country Code', choices=[('+91', 'India (+91)'), ('+1', 'USA (+1)'), ('+44', 'UK (+44)'), ('+61', 'Australia (+61)')], default='+91', render_kw={'aria-label': 'Country code'})
     submit = SubmitField('Update Profile')
 
+# Discount Code Form
+class DiscountCodeForm(FlaskForm):
+    code = StringField('Discount Code', validators=[DataRequired(), Length(min=3, max=20)], render_kw={'aria-label': 'Discount code'})
+    percentage = FloatField('Discount Percentage', validators=[DataRequired(), NumberRange(min=0.01, max=100)], render_kw={'aria-label': 'Discount percentage'})
+    expiry = DateField('Expiry Date', validators=[DataRequired()], format='%Y-%m-%d', render_kw={'aria-label': 'Expiry date'})
+    submit = SubmitField('Add Discount Code')
+
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -128,17 +138,23 @@ def init_db():
     with app.app_context():
         try:
             db.create_all()
+            # Reset products sequence
+            max_id = db.session.query(db.func.max(Product.id)).scalar()
+            if max_id is None:
+                next_id = 1
+            else:
+                next_id = max_id + 1
+            db.session.execute(text("SELECT setval('products_id_seq', :next_id, false)"), {"next_id": next_id})
             # Create admin user if it doesn't exist
             if not db.session.query(User).filter_by(email='admin@themithlanchal.com').first():
                 admin = User(email='admin@themithlanchal.com', 
                              password=generate_password_hash('admin123'),
                              is_admin=True, mobile_number='+919876543210')
                 db.session.add(admin)
-                db.session.commit()
-                app.logger.info("Admin user 'admin@themithlanchal.com' created")
-            app.logger.info("Database tables created successfully")
+            db.session.commit()
+            app.logger.info("Database initialized successfully")
         except Exception as e:
-            app.logger.error(f"Failed to initialize database or admin: {e}")
+            app.logger.error(f"Failed to initialize database: {e}")
             raise
 
 # Call the initialization function
@@ -258,23 +274,31 @@ def admin():
 def admin_discounts():
     if not current_user.is_admin:
         return redirect(url_for('index'))
+    form = DiscountCodeForm()
     if request.method == 'POST':
-        code = escape(request.form['code']).upper()
-        percentage = float(request.form['percentage'])
-        expiry_str = request.form['expiry']
-        expiry = datetime.strptime(expiry_str, '%Y-%m-%d')
-        with app.app_context():
-            if db.session.query(DiscountCode).filter_by(code=code).first():
-                flash('Discount code already exists')
-            else:
-                discount = DiscountCode(code=code, percentage=percentage, expiry=expiry)
-                db.session.add(discount)
-                db.session.commit()
-                flash('Discount code added')
-        return redirect(url_for('admin_discounts'))
+        if form.validate_on_submit():
+            code = escape(form.code.data).upper()
+            percentage = form.percentage.data
+            expiry = form.expiry.data
+            with app.app_context():
+                if db.session.query(DiscountCode).filter_by(code=code).first():
+                    flash('Discount code already exists', 'danger')
+                else:
+                    discount = DiscountCode(
+                        code=code,
+                        percentage=percentage,
+                        expiry=expiry
+                    )
+                    db.session.add(discount)
+                    db.session.commit()
+                    flash('Discount code added successfully', 'success')
+            return redirect(url_for('admin_discounts'))
+        else:
+            flash('Form validation failed. Please check your input.', 'danger')
+            app.logger.debug(f"Discount code form errors: {form.errors}")
     with app.app_context():
         discounts = db.session.query(DiscountCode).all()
-    return render_template('admin_discounts.html', discounts=discounts)
+    return render_template('admin_discounts.html', discounts=discounts, form=form)
 
 @app.route('/product/<int:id>')
 def product(id):

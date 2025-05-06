@@ -6,18 +6,39 @@
     <form method="POST" action="{{ url_for('admin_discounts') }}">
         {{ form.csrf_token }}
         <div class="mb-3">
-            <label for="code" class="form-label">Discount Code</label>
-            <input type="text" class="form-control" id="code" name="code" required value="{{ form.code.data or '' }}" aria-label="Discount code">
+            {{ form.code.label(class="form-label") }}
+            {{ form.code(class="form-control") }}
+            {% if form.code.errors %}
+                <div class="text-danger">
+                    {% for error in form.code.errors %}
+                        <small>{{ error }}</small><br>
+                    {% endfor %}
+                </div>
+            {% endif %}
         </div>
         <div class="mb-3">
-            <label for="percentage" class="form-label">Percentage (%)</label>
-            <input type="number" step="0.1" class="form-control" id="percentage" name="percentage" required value="{{ form.percentage.data or '' }}" aria-label="Percentage">
+            {{ form.percentage.label(class="form-label") }}
+            {{ form.percentage(class="form-control", step="0.1") }}
+            {% if form.percentage.errors %}
+                <div class="text-danger">
+                    {% for error in form.percentage.errors %}
+                        <small>{{ error }}</small><br>
+                    {% endfor %}
+                </div>
+            {% endif %}
         </div>
         <div class="mb-3">
-            <label for="expiry" class="form-label">Expiry Date</label>
-            <input type="date" class="form-control" id="expiry" name="expiry" required value="{{ form.expiry.data or '' }}" aria-label="Expiry date">
+            {{ form.expiry.label(class="form-label") }}
+            {{ form.expiry(class="form-control", value=(form.expiry.data.strftime('%Y-%m-%d') if form.expiry.data else '')) }}
+            {% if form.expiry.errors %}
+                <div class="text-danger">
+                    {% for error in form.expiry.errors %}
+                        <small>{{ error }}</small><br>
+                    {% endfor %}
+                </div>
+            {% endif %}
         </div>
-        <button type="submit" class="btn btn-primary">Add Discount</button>
+        {{ form.submit(class="btn btn-primary") }}
     </form>
     <h2 class="mt-5">Discount Codes</h2>
     {% if discounts %}
