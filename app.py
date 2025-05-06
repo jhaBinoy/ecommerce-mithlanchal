@@ -27,7 +27,6 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy.sql import text
 from flask_migrate import Migrate
 
-
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', os.urandom(24).hex())
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'postgresql://admin:gv64uAaltfP9OVOVvlNtt6dnC31PXqZR@dpg-d01bdjre5dus73e3bptg-a.oregon-postgres.render.com/store_lt18?sslmode=require')
@@ -118,6 +117,17 @@ class DiscountCodeForm(FlaskForm):
     expiry = DateField('Expiry Date', validators=[DataRequired()], format='%Y-%m-%d', render_kw={'aria-label': 'Expiry date'})
     submit = SubmitField('Add Discount Code')
 
+# Order Status Update Form
+class OrderStatusForm(FlaskForm):
+    status = SelectField('Status', choices=[
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('shipped', 'Shipped'),
+        ('delivered', 'Delivered'),
+        ('cancelled', 'Cancelled')
+    ], validators=[DataRequired()], render_kw={'aria-label': 'Order status'})
+    submit = SubmitField('Update Status')
+
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -179,6 +189,7 @@ def index():
         products = products_query.all()
         categories = db.session.query(Product.category).distinct().all()
         categories = [c[0] for c in categories if c[0]]
+    form = CartForm()  # Add this line
     return render_template('index.html', products=products, categories=categories)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -299,6 +310,64 @@ def admin_discounts():
     with app.app_context():
         discounts = db.session.query(DiscountCode).all()
     return render_template('admin_discounts.html', discounts=discounts, form=form)
+
+@app.route('/admin/orders', methods=['GET', 'POST'])
+@login_required
+def admin_orders():
+    if not current_user.is_admin:
+        return redirect(url_for('index'))
+    form = OrderStatusForm()
+    if request.method == 'POST':
+        if form.validate_on_submit():
+            order_id = request.form.get('order_id')
+            new_status = form.status.data
+            with app.app_context():
+                order = db.session.query(Order).get_or_404(order_id)
+                old_status = order.status
+                order.status = new_status
+                db.session.commit()
+                # Send email notification to user
+                try:
+                    items_list = ''
+                    for item in order.order_items:
+                        items_list += f'- {item.product.name} (x{item.quantity}): ₹{item.price * item.quantity:.2f}\n'
+                    msg = Message(
+                        subject=f"The Mithlanchal - Order #{order.id} Status Updated",
+                        recipients=[order.email],
+                        body=f"""
+Dear Customer,
+
+Your order status has been updated!
+
+Order #{order.id}
+Date: {order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else 'Not available'}
+Previous Status: {old_status.title()}
+New Status: {new_status.title()}
+Total: ₹{order.total:.2f}
+{f'Discount: ₹{order.discount_applied:.2f}' if order.discount_applied > 0 else ''}
+Shipping Address: {order.shipping_address}
+Mobile: {order.mobile_number}
+
+Items:
+{items_list}
+
+Thank you for shopping with The Mithlanchal!
+
+Best,
+The Mithlanchal Team
+"""
+                    )
+                    mail.send(msg)
+                    flash(f'Order #{order.id} status updated to {new_status.title()} and user notified.', 'success')
+                except Exception as e:
+                    app.logger.error(f"Email notification failed: {e}")
+                    flash(f'Order #{order.id} status updated to {new_status.title()}, but email notification failed.', 'warning')
+            return redirect(url_for('admin_orders'))
+        else:
+            flash('Form validation failed. Please check your input.', 'danger')
+    with app.app_context():
+        orders = db.session.query(Order).order_by(Order.id.desc()).all()
+    return render_template('admin_orders.html', orders=orders, form=form)
 
 @app.route('/product/<int:id>')
 def product(id):

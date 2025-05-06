@@ -7,38 +7,44 @@
     <div class="row">
         <div class="col-md-6">
             {% if product.image %}
-                <img src="{{ url_for('static', filename=product.image) }}" class="img-fluid" alt="{{ product.name }}">
+                <img src="{{ url_for('static', filename=product.image) }}" class="img-fluid rounded shadow" alt="{{ product.name }}" aria-label="Image of {{ product.name }}">
             {% else %}
-                <img src="{{ url_for('static', filename='images/placeholder.jpg') }}" class="img-fluid" alt="Placeholder">
+                <img src="{{ url_for('static', filename='images/placeholder.jpg') }}" class="img-fluid rounded shadow" alt="Placeholder" aria-label="Placeholder image">
             {% endif %}
         </div>
         <div class="col-md-6">
-            <h1>{{ product.name }}</h1>
-            <p><strong>Price:</strong> ₹{{ product.price }}</p>
-            <p><strong>Category:</strong> {{ product.category }}</p>
-            <p><strong>Description:</strong> {{ product.description or 'No description available.' }}</p>
-            <form method="POST" action="{{ url_for('cart') }}" id="add-to-cart-form">
-                {{ form.hidden_tag() }} <!-- Use hidden_tag to ensure CSRF token is included -->
-                {{ form.product_id }}
-                <div class="mb-3">
-                    {{ form.quantity.label }}
-                    {{ form.quantity(class="form-control") }}
-                    {% if form.quantity.errors %}
-                        {% for error in form.quantity.errors %}
-                            <span class="text-danger">{{ error }}</span>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-                {{ form.submit(class="btn btn-primary", id="add-to-cart-btn") }}
-            </form>
+            <div class="card p-4">
+                <h1 class="font-playfair">{{ product.name }}</h1>
+                <p class="font-poppins"><strong>Price:</strong> ₹{{ product.price|round(2) }}</p>
+                <p class="font-poppins"><strong>Category:</strong> {{ product.category|title }}</p>
+                <p class="font-poppins"><strong>Description:</strong> {{ product.description or 'No description available.' }}</p>
+                <form method="POST" action="{{ url_for('cart') }}" id="add-to-cart-form">
+                    {{ form.hidden_tag() }}
+                    {{ form.product_id }}
+                    <div class="mb-3">
+                        {{ form.quantity.label(class="form-label font-poppins") }}
+                        {{ form.quantity(class="form-control") }}
+                        {% if form.quantity.errors %}
+                            {% for error in form.quantity.errors %}
+                                <span class="text-danger font-poppins">{{ error }}</span>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    {{ form.submit(class="btn btn-primary", id="add-to-cart-btn") }}
+                    <span id="loading-spinner" class="spinner-border spinner-border-sm text-gold ms-2 d-none" role="status" aria-hidden="true"></span>
+                </form>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
     document.getElementById('add-to-cart-form').onsubmit = function() {
-        document.getElementById('add-to-cart-btn').disabled = true;
-        document.getElementById('add-to-cart-btn').innerText = 'Adding...';
+        const button = document.getElementById('add-to-cart-btn');
+        const spinner = document.getElementById('loading-spinner');
+        button.disabled = true;
+        button.innerText = 'Adding...';
+        spinner.classList.remove('d-none');
     };
 </script>
 {% endblock %}

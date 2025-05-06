@@ -4,7 +4,38 @@
 
 {% block content %}
 <div class="container mt-5">
-    <h1>Welcome to The Mithlanchal</h1>
+    <h1 class="text-center mb-4 font-playfair">Welcome to The Mithlanchal</h1>
+
+    <!-- Product Carousel -->
+    {% if products %}
+        <div id="productCarousel" class="carousel slide mb-5 shadow-lg rounded" data-bs-ride="carousel">
+            <div class="carousel-indicators">
+                {% for product in products[:3] %}
+                    <button type="button" data-bs-target="#productCarousel" data-bs-slide-to="{{ loop.index0 }}" class="{% if loop.first %}active{% endif %}" aria-current="{% if loop.first %}true{% endif %}" aria-label="Slide to product {{ product.name }}"></button>
+                {% endfor %}
+            </div>
+            <div class="carousel-inner">
+                {% for product in products[:3] %}
+                    <div class="carousel-item {% if loop.first %}active{% endif %}">
+                        <img src="{{ url_for('static', filename=product.image) if product.image else url_for('static', filename='images/placeholder.jpg') }}" class="d-block w-100" alt="{{ product.name }}" style="height: 400px; object-fit: cover;" aria-label="Image of {{ product.name }}">
+                        <div class="carousel-caption d-none d-md-block bg-maroon bg-opacity-75 rounded p-3">
+                            <h5 class="font-playfair text-gold">{{ product.name }}</h5>
+                            <p class="font-poppins text-cream">₹{{ product.price|round(2) }}</p>
+                            <a href="{{ url_for('product', id=product.id) }}" class="btn btn-primary btn-sm" aria-label="View product {{ product.name }}">View Product</a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+            <button class="carousel-control-prev" type="button" data-bs-target="#productCarousel" data-bs-slide="prev" aria-label="Previous product slide">
+                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                <span class="visually-hidden">Previous</span>
+            </button>
+            <button class="carousel-control-next" type="button" data-bs-target="#productCarousel" data-bs-slide="next" aria-label="Next product slide">
+                <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                <span class="visually-hidden">Next</span>
+            </button>
+        </div>
+    {% endif %}
 
     <!-- Search and Filter Form -->
     <form method="GET" action="{{ url_for('index') }}" class="mb-4">
@@ -16,7 +47,7 @@
                 <select name="category" class="form-select" aria-label="Category">
                     <option value="">All Categories</option>
                     {% for category in categories %}
-                        <option value="{{ category }}" {% if request.args.get('category') == category %}selected{% endif %}>{{ category }}</option>
+                        <option value="{{ category }}" {% if request.args.get('category') == category %}selected{% endif %}>{{ category | title }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -27,7 +58,7 @@
                 <input type="number" name="max_price" class="form-control" placeholder="Max Price" value="{{ request.args.get('max_price', '') }}" step="0.01" aria-label="Maximum price">
             </div>
             <div class="col-md-2">
-                <button type="submit" class="btn btn-primary w-100">Filter</button>
+                <button type="submit" class="btn btn-primary w-100" aria-label="Filter products">Filter</button>
             </div>
         </div>
     </form>
@@ -39,21 +70,22 @@
                 <div class="col-md-4 mb-4">
                     <div class="card h-100">
                         {% if product.image %}
-                            <img src="{{ url_for('static', filename=product.image) }}" class="card-img-top" alt="{{ product.name }}">
+                            <img src="{{ url_for('static', filename=product.image) }}" class="card-img-top" alt="{{ product.name }}" aria-label="Image of {{ product.name }}">
                         {% else %}
-                            <img src="{{ url_for('static', filename='images/placeholder.jpg') }}" class="card-img-top" alt="Placeholder">
+                            <img src="{{ url_for('static', filename='images/placeholder.jpg') }}" class="card-img-top" alt="Placeholder" aria-label="Placeholder image">
                         {% endif %}
                         <div class="card-body">
-                            <h5 class="card-title">{{ product.name }}</h5>
-                            <p class="card-text">₹{{ product.price }}</p>
-                            <p class="card-text">{{ product.description|truncate(100) }}</p>
-                            <a href="{{ url_for('product', id=product.id) }}" class="btn btn-outline-primary">View Product</a>
+                            <h5 class="card-title font-playfair">{{ product.name }}</h5>
+                            <p class="card-text font-poppins">₹{{ product.price|round(2) }}</p>
+                            <p class="card-text font-poppins">{{ product.description|truncate(100) }}</p>
+                            <a href="{{ url_for('product', id=product.id) }}" class="btn btn-primary" aria-label="View product {{ product.name }}">View Product</a>
                             {% if current_user.is_authenticated %}
                                 <form method="POST" action="{{ url_for('cart') }}" class="d-inline" id="add-to-cart-form-{{ product.id }}">
                                     {{ form.csrf_token if form else '' }}
                                     <input type="hidden" name="product_id" value="{{ product.id }}">
                                     <input type="hidden" name="quantity" value="1">
-                                    <button type="submit" class="btn btn-primary mt-2" id="add-to-cart-btn-{{ product.id }}">Add to Cart</button>
+                                    <button type="submit" class="btn btn-secondary mt-2" id="add-to-cart-btn-{{ product.id }}" aria-label="Add {{ product.name }} to cart">Add to Cart</button>
+                                    <span id="loading-spinner-{{ product.id }}" class="spinner-border spinner-border-sm text-gold ms-2 d-none" role="status" aria-hidden="true"></span>
                                 </form>
                             {% endif %}
                         </div>
@@ -61,17 +93,19 @@
                 </div>
             {% endfor %}
         {% else %}
-            <p>No products found.</p>
+            <p class="font-poppins">No products found.</p>
         {% endif %}
     </div>
 </div>
 
 <script>
-    
     {% for product in products %}
         document.getElementById('add-to-cart-form-{{ product.id }}').onsubmit = function() {
-            document.getElementById('add-to-cart-btn-{{ product.id }}').disabled = true;
-            document.getElementById('add-to-cart-btn-{{ product.id }}').innerText = 'Adding...';
+            const button = document.getElementById('add-to-cart-btn-{{ product.id }}');
+            const spinner = document.getElementById('loading-spinner-{{ product.id }}');
+            button.disabled = true;
+            button.innerText = 'Adding...';
+            spinner.classList.remove('d-none');
         };
     {% endfor %}
 </script>

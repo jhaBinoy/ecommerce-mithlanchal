@@ -1,59 +1,117 @@
-/* Custom styles for The Mithlanchal */
-body {
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-    background-color: #fff5e6; /* Light cream for warmth */
-    color: #2c1a0a; /* Dark brown for text */
-    font-family: 'Arial', sans-serif;
+/* Color Palette */
+.bg-maroon {
+    background-color: #4A0E0E; /* Deep maroon for a royal feel */
 }
 
-.content {
-    flex: 1;
+.text-gold {
+    color: #D4AF37; /* Gold for a premium touch */
+}
+
+.bg-cream {
+    background-color: #FFF8E7; /* Cream background for a cultured look */
+}
+
+/* Fonts */
+.font-playfair {
+    font-family: 'Playfair Display', serif;
+}
+
+.font-poppins {
+    font-family: 'Poppins', sans-serif;
+}
+
+/* General Styling */
+body {
+    font-family: 'Poppins', sans-serif;
+    background: linear-gradient(to bottom, #FFF8E7, #FFF5D1);
+    color: #333;
 }
 
 .navbar {
-    background-color: #8b1e2d !important; /* Deep maroon for tradition */
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
 }
 
-.navbar-brand, .nav-link {
-    color: #ffd700 !important; /* Gold for elegance */
+.navbar-brand:hover, .nav-link:hover {
+    color: #F4C430 !important; /* Brighter gold on hover */
+    transition: color 0.3s ease;
 }
 
-.nav-link:hover {
-    color: #fff !important; /* White on hover */
-}
-
-.footer {
-    padding: 15px 0;
-    background-color: #8b1e2d; /* Maroon to match header */
-    color: #ffd700; /* Gold text */
-    font-size: 14px;
-    font-weight: 400;
+h1, h2, h3 {
+    font-family: 'Playfair Display', serif;
+    color: #4A0E0E;
 }
 
 .card {
-    border: 1px solid #d4a373; /* Light gold border */
-    background-color: #ffffff;
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    background: #FFFFFF;
 }
 
 .card:hover {
-    transform: scale(1.02);
-    transition: transform 0.2s;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-5px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+}
+
+.card-img-top {
+    border-top-left-radius: 15px;
+    border-top-right-radius: 15px;
+    object-fit: cover;
+    height: 200px;
 }
 
 .btn-primary {
-    background-color: #d4a373; /* Gold button */
-    border-color: #d4a373;
+    background-color: #4A0E0E;
+    border-color: #4A0E0E;
+    font-family: 'Poppins', sans-serif;
+    transition: background-color 0.3s ease;
 }
 
 .btn-primary:hover {
-    background-color: #b5895a; /* Darker gold */
-    border-color: #b5895a;
+    background-color: #6B1C1C;
+    border-color: #6B1C1C;
 }
 
-.input-group select {
-    max-width: 120px;
+.btn-secondary {
+    background-color: #D4AF37;
+    border-color: #D4AF37;
+    color: #4A0E0E;
+    font-family: 'Poppins', sans-serif;
+}
+
+.btn-secondary:hover {
+    background-color: #F4C430;
+    border-color: #F4C430;
+}
+
+.table th {
+    background-color: #4A0E0E;
+    color: #D4AF37;
+}
+
+.table td {
+    background-color: #FFF8E7;
+}
+
+/* Glossy Button Effect */
+button, .btn {
+    position: relative;
+    overflow: hidden;
+}
+
+button::after, .btn::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.3), transparent);
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+button:hover::after, .btn:hover::after {
+    opacity: 1;
 }

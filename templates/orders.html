@@ -2,16 +2,16 @@
 {% block title %}Your Orders{% endblock %}
 {% block content %}
 <div class="container mt-5">
-    <h2>Your Orders</h2>
+    <h2 class="font-playfair">Your Orders</h2>
     {% if orders %}
         <table class="table table-striped">
             <thead>
                 <tr>
-                    <th>Order ID</th>
-                    <th>Date</th>
-                    <th>Total</th>
-                    <th>Status</th>
-                    <th>Action</th>
+                    <th scope="col" aria-label="Order ID">Order ID</th>
+                    <th scope="col" aria-label="Order Date">Date</th>
+                    <th scope="col" aria-label="Order Total">Total</th>
+                    <th scope="col" aria-label="Order Status">Status</th>
+                    <th scope="col" aria-label="Actions">Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -19,18 +19,21 @@
                     <tr>
                         <td>#{{ order.id }}</td>
                         <td>{{ order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else 'N/A' }}</td>
-                        <td>₹{{ order.total }}</td>
-                        <td>{{ order.status | capitalize }}</td>
+                        <td>₹{{ order.total|round(2) }}</td>
+                        <td>{{ order.status|capitalize }}</td>
                         <td>
-                            <a href="{{ url_for('order_confirmation', order_id=order.id) }}" class="btn btn-sm btn-primary">View Details</a>
-                            <a href="{{ url_for('generate_invoice', order_id=order.id) }}" class="btn btn-sm btn-secondary">Download Invoice</a>
+                            <a href="{{ url_for('order_confirmation', order_id=order.id) }}" class="btn btn-sm btn-primary" aria-label="View details of order #{{ order.id }}">View Details</a>
+                            <a href="{{ url_for('generate_invoice', order_id=order.id) }}" class="btn btn-sm btn-secondary" aria-label="Download invoice for order #{{ order.id }}">Download Invoice</a>
+                            {% if order.status in ['pending', 'processing'] %}
+                                <a href="{{ url_for('cancel_order', order_id=order.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to cancel this order?');" aria-label="Cancel order #{{ order.id }}">Cancel Order</a>
+                            {% endif %}
                         </td>
                     </tr>
                 {% endfor %}
             </tbody>
         </table>
     {% else %}
-        <p>You have no orders yet. Start shopping now!</p>
+        <p class="font-poppins">You have no orders yet. Start shopping now!</p>
         <a href="{{ url_for('index') }}" class="btn btn-primary">Shop Now</a>
     {% endif %}
 </div>

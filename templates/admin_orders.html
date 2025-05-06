@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}Manage Orders{% endblock %}
+{% block content %}
+<div class="container my-5">
+    <h1>Manage Orders</h1>
+    {% if orders %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Order ID</th>
+                    <th>User Email</th>
+                    <th>Date</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                    <tr>
+                        <td>#{{ order.id }}</td>
+                        <td>{{ order.email }}</td>
+                        <td>{{ order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else 'N/A' }}</td>
+                        <td>₹{{ order.total|round(2) }}</td>
+                        <td>{{ order.status|capitalize }}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('admin_orders') }}" class="d-inline">
+                                {{ form.csrf_token }}
+                                <input type="hidden" name="order_id" value="{{ order.id }}">
+                                {{ form.status(class="form-select d-inline-block w-auto") }}
+                                {{ form.submit(class="btn btn-primary btn-sm") }}
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No orders yet.</p>
+    {% endif %}
+    <a href="{{ url_for('admin') }}" class="btn btn-secondary mt-3">Manage Products</a>
+    <a href="{{ url_for('admin_discounts') }}" class="btn btn-secondary mt-3">Manage Discounts</a>
+</div>
+{% endblock %}

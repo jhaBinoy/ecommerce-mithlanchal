@@ -2,23 +2,23 @@
 {% block title %}Checkout - The Mithlanchal{% endblock %}
 {% block content %}
 <div class="container mt-5">
-    <h1>Checkout</h1>
+    <h1 class="font-playfair">Checkout</h1>
     {% with messages = get_flashed_messages() %}
         {% if messages %}
             {% for message in messages %}
-                <div class="alert alert-warning">{{ message }}</div>
+                <div class="alert alert-warning font-poppins">{{ message }}</div>
             {% endfor %}
         {% endif %}
     {% endwith %}
     {% if order %}
-        <h2>Complete Payment</h2>
-        <div class="alert alert-info">
-            Total Amount: ₹{{ total }}
+        <h2 class="font-playfair">Complete Payment</h2>
+        <div class="alert alert-info font-poppins">
+            Total Amount: ₹{{ total|round(2) }}
             {% if discount > 0 %}
-                <br>Discount Applied: ₹{{ discount }}
+                <br>Discount Applied: ₹{{ discount|round(2) }}
             {% endif %}
         </div>
-        <form id="razorpay-form">
+        <form id="razorpay-form" aria-label="Razorpay payment form">
             <input type="hidden" name="db_order_id" value="{{ db_order_id }}">
             <script
                 src="https://checkout.razorpay.com/v1/checkout.js"
@@ -68,73 +68,102 @@
                         });
                         document.body.appendChild(form);
                         form.submit();
+                    },
+                    modal: {
+                        ondismiss: function() {
+                            document.getElementById('pay-now-btn').style.display = 'inline-block';
+                            document.getElementById('loading-spinner').classList.add('d-none');
+                        }
                     }
                 };
                 const rzp = new Razorpay(options);
                 rzp.open();
+                // Add a custom Pay Now button to handle loading state
+                const payButton = document.querySelector('input[type="button"][data-buttontext="Pay Now"]');
+                payButton.style.display = 'none'; // Hide default Razorpay button
+                const customButton = document.createElement('button');
+                customButton.id = 'pay-now-btn';
+                customButton.className = 'btn btn-primary';
+                customButton.innerText = 'Pay Now';
+                customButton.onclick = function() {
+                    customButton.style.display = 'none';
+                    document.getElementById('loading-spinner').classList.remove('d-none');
+                    rzp.open();
+                };
+                const spinner = document.createElement('span');
+                spinner.id = 'loading-spinner';
+                spinner.className = 'spinner-border spinner-border-sm text-gold ms-2 d-none';
+                spinner.setAttribute('role', 'status');
+                spinner.setAttribute('aria-hidden', 'true');
+                document.getElementById('razorpay-form').appendChild(customButton);
+                document.getElementById('razorpay-form').appendChild(spinner);
             });
         </script>
     {% else %}
-        <h2>Your Order</h2>
-        <table class="table table-bordered">
-            <thead>
-                <tr>
-                    <th>Product</th>
-                    <th>Price</th>
-                    <th>Quantity</th>
-                    <th>Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in cart_items %}
-                    <tr>
-                        <td>{{ item.product.name }}</td>
-                        <td>₹{{ item.product.price }}</td>
-                        <td>{{ item.quantity }}</td>
-                        <td>₹{{ (item.product.price * item.quantity)|round(2) }}</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <p><strong>Subtotal:</strong> ₹{{ (total + discount)|round(2) }}</p>
-        {% if discount > 0 %}
-            <p><strong>Discount:</strong> ₹{{ discount|round(2) }}</p>
-        {% endif %}
-        <p><strong>Total:</strong> ₹{{ total|round(2) }}</p>
+        <h2 class="font-playfair">Your Order</h2>
+        <div class="card mb-4">
+            <div class="card-body">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th scope="col" aria-label="Product Name">Product</th>
+                            <th scope="col" aria-label="Product Price">Price</th>
+                            <th scope="col" aria-label="Quantity">Quantity</th>
+                            <th scope="col" aria-label="Total Price">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in cart_items %}
+                            <tr>
+                                <td>{{ item.product.name }}</td>
+                                <td>₹{{ item.product.price|round(2) }}</td>
+                                <td>{{ item.quantity }}</td>
+                                <td>₹{{ (item.product.price * item.quantity)|round(2) }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <p class="font-poppins"><strong>Subtotal:</strong> ₹{{ (total + discount)|round(2) }}</p>
+                {% if discount > 0 %}
+                    <p class="font-poppins"><strong>Discount:</strong> ₹{{ discount|round(2) }}</p>
+                {% endif %}
+                <p class="font-poppins"><strong>Total:</strong> ₹{{ total|round(2) }}</p>
+            </div>
+        </div>
 
-        <h2>Shipping & Payment</h2>
+        <h2 class="font-playfair">Shipping & Payment</h2>
         <form method="post" action="{{ url_for('checkout') }}">
             {{ form.hidden_tag() }}
             <div class="mb-3">
-                <label for="shipping_address" class="form-label">Shipping Address</label>
+                <label for="shipping_address" class="form-label font-poppins">Shipping Address</label>
                 {{ form.shipping_address(class="form-control", rows=3) }}
                 {% for error in form.shipping_address.errors %}
-                    <span class="text-danger">{{ error }}</span>
+                    <span class="text-danger font-poppins">{{ error }}</span>
                 {% endfor %}
             </div>
             <div class="mb-3">
-                <label for="mobile_number" class="form-label">Mobile Number</label>
+                <label for="mobile_number" class="form-label font-poppins">Mobile Number</label>
                 {{ form.mobile_number(class="form-control") }}
                 {% for error in form.mobile_number.errors %}
-                    <span class="text-danger">{{ error }}</span>
+                    <span class="text-danger font-poppins">{{ error }}</span>
                 {% endfor %}
             </div>
             <div class="mb-3">
-                <label for="email" class="form-label">Email</label>
+                <label for="email" class="form-label font-poppins">Email</label>
                 {{ form.email(class="form-control", value=user_email) }}
                 {% for error in form.email.errors %}
-                    <span class="text-danger">{{ error }}</span>
+                    <span class="text-danger font-poppins">{{ error }}</span>
                 {% endfor %}
             </div>
             <div class="mb-3">
-                <label for="discount_code" class="form-label">Discount Code (Optional)</label>
+                <label for="discount_code" class="form-label font-poppins">Discount Code (Optional)</label>
                 {{ form.discount_code(class="form-control") }}
             </div>
             <div class="mb-3">
-                <label for="payment_method" class="form-label">Payment Method</label>
+                <label for="payment_method" class="form-label font-poppins">Payment Method</label>
                 {{ form.payment_method(class="form-select") }}
                 {% for error in form.payment_method.errors %}
-                    <span class="text-danger">{{ error }}</span>
+                    <span class="text-danger font-poppins">{{ error }}</span>
                 {% endfor %}
             </div>
             {{ form.submit(class="btn btn-primary") }}

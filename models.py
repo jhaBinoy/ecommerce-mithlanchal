@@ -60,7 +60,7 @@ class Order(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     total = db.Column(db.Float, nullable=False)
     payment_method = db.Column(db.String(50), nullable=False)
-    status = db.Column(db.String(50), default='pending')
+    status = db.Column(db.String(50), nullable=False, default='pending')  # Supports 'pending', 'processing', 'shipped', 'delivered', 'cancelled'
     shipping_address = db.Column(db.Text, nullable=False)
     mobile_number = db.Column(db.String(20), nullable=False)
     email = db.Column(db.String(120), nullable=False)

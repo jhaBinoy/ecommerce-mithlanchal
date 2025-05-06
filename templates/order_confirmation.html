@@ -2,44 +2,49 @@
 {% block title %}Order Confirmation - The Mithlanchal{% endblock %}
 {% block content %}
 <div class="container mt-5">
-    <h1>Order Confirmation</h1>
-    <p>Thank you for your order! Here are the details:</p>
-    <p><strong>Order #:</strong> {{ order.id }}</p>
-    <p><strong>Date:</strong> {{ order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else 'Not available' }}</p>
-    <p><strong>Total:</strong> ₹{{ order.total|round(2) }}</p>
-    {% if order.discount_applied > 0 %}
-        <p><strong>Discount Applied:</strong> ₹{{ order.discount_applied|round(2) }}</p>
-    {% endif %}
-    <p><strong>Payment Method:</strong> {{ order.payment_method.title() }}</p>
-    {% if order.payment_id %}
-        <p><strong>Payment ID:</strong> {{ order.payment_id }}</p>
-    {% endif %}
-    <p><strong>Shipping Address:</strong> {{ order.shipping_address }}</p>
-    <p><strong>Mobile Number:</strong> {{ order.mobile_number }}</p>
-    <p><strong>Email:</strong> {{ order.email }}</p>
-    <h2>Items</h2>
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th>Product</th>
-                <th>Price</th>
-                <th>Quantity</th>
-                <th>Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in order.order_items %}
+    <h1 class="font-playfair">Order Confirmation</h1>
+    <div class="card p-4 mb-4">
+        <p class="font-poppins">Thank you for your order! Here are the details:</p>
+        <p class="font-poppins" aria-label="Order Number"><strong>Order #:</strong> {{ order.id }}</p>
+        <p class="font-poppins" aria-label="Order Date"><strong>Date:</strong> {{ order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else 'Not available' }}</p>
+        <p class="font-poppins" aria-label="Order Total"><strong>Total:</strong> ₹{{ order.total|round(2) }}</p>
+        {% if order.discount_applied > 0 %}
+            <p class="font-poppins" aria-label="Discount Applied"><strong>Discount Applied:</strong> ₹{{ order.discount_applied|round(2) }}</p>
+        {% endif %}
+        <p class="font-poppins" aria-label="Payment Method"><strong>Payment Method:</strong> {{ order.payment_method.title() }}</p>
+        {% if order.payment_id %}
+            <p class="font-poppins" aria-label="Payment ID"><strong>Payment ID:</strong> {{ order.payment_id }}</p>
+        {% endif %}
+        <p class="font-poppins" aria-label="Shipping Address"><strong>Shipping Address:</strong> {{ order.shipping_address }}</p>
+        <p class="font-poppins" aria-label="Mobile Number"><strong>Mobile Number:</strong> {{ order.mobile_number }}</p>
+        <p class="font-poppins" aria-label="Email"><strong>Email:</strong> {{ order.email }}</p>
+        <h2 class="font-playfair">Items</h2>
+        <table class="table table-bordered">
+            <thead>
                 <tr>
-                    <td>{{ item.product.name }}</td>
-                    <td>₹{{ item.price|round(2) }}</td>
-                    <td>{{ item.quantity }}</td>
-                    <td>₹{{ (item.price * item.quantity)|round(2) }}</td>
+                    <th scope="col" aria-label="Product Name">Product</th>
+                    <th scope="col" aria-label="Product Price">Price</th>
+                    <th scope="col" aria-label="Quantity">Quantity</th>
+                    <th scope="col" aria-label="Total Price">Total</th>
                 </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    <a href="{{ url_for('generate_invoice', order_id=order.id) }}" class="btn btn-primary">Download Invoice</a>
-    <a href="{{ url_for('index') }}" class="btn btn-secondary">Continue Shopping</a>
+            </thead>
+            <tbody>
+                {% for item in order.order_items %}
+                    <tr>
+                        <td class="font-poppins">{{ item.product.name }}</td>
+                        <td class="font-poppins">₹{{ item.price|round(2) }}</td>
+                        <td class="font-poppins">{{ item.quantity }}</td>
+                        <td class="font-poppins">₹{{ (item.price * item.quantity)|round(2) }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <a href="{{ url_for('generate_invoice', order_id=order.id) }}" class="btn btn-primary" aria-label="Download invoice for order #{{ order.id }}">Download Invoice</a>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary" aria-label="Continue Shopping">Continue Shopping</a>
+        {% if order.status in ['pending', 'processing'] %}
+            <a href="{{ url_for('cancel_order', order_id=order.id) }}" class="btn btn-danger" onclick="return confirm('Are you sure you want to cancel this order?');" aria-label="Cancel order #{{ order.id }}">Cancel Order</a>
+        {% endif %}
+    </div>
     <!--Start of Tawk.to Script-->
     <script type="text/javascript">
         var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();

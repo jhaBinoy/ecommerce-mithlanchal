@@ -2,7 +2,7 @@
 {% block title %}Your Account{% endblock %}
 {% block content %}
 <div class="container mt-5">
-    <h2>Your Account</h2>
+    <h2 class="font-playfair">Your Account</h2>
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
@@ -12,24 +12,24 @@
     {% endwith %}
     <div class="card mb-4">
         <div class="card-body">
-            <h5 class="card-title">Profile Information</h5>
-            <p><strong>Email:</strong> {{ current_user.email }}</p>
-            <p><strong>Mobile Number:</strong> {{ current_user.mobile_number if current_user.mobile_number else 'Not set' }}</p>
+            <h5 class="card-title font-playfair">Profile Information</h5>
+            <p class="font-poppins" aria-label="User Email"><strong>Email:</strong> {{ current_user.email }}</p>
+            <p class="font-poppins" aria-label="User Mobile Number"><strong>Mobile Number:</strong> {{ current_user.mobile_number if current_user.mobile_number else 'Not set' }}</p>
         </div>
     </div>
-    <h4>Update Profile</h4>
+    <h4 class="font-playfair">Update Profile</h4>
     <form method="POST">
         {{ form.hidden_tag() }}
         <div class="mb-3">
-            <label for="country_code" class="form-label">Country Code</label>
+            <label for="country_code" class="form-label font-poppins">Country Code</label>
             {{ form.country_code(class="form-control") }}
         </div>
         <div class="mb-3">
-            <label for="mobile_number" class="form-label">Mobile Number</label>
+            <label for="mobile_number" class="form-label font-poppins">Mobile Number</label>
             {{ form.mobile_number(class="form-control") }}
             {% if form.mobile_number.errors %}
                 {% for error in form.mobile_number.errors %}
-                    <div class="text-danger">{{ error }}</div>
+                    <div class="text-danger font-poppins">{{ error }}</div>
                 {% endfor %}
             {% endif %}
         </div>

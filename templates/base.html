@@ -5,72 +5,82 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{% endblock %} - The Mithlanchal</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+<body class="bg-cream">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-maroon shadow-sm">
         <div class="container">
-            <a class="navbar-brand" href="{{ url_for('index') }}">The Mithlanchal</a>
+            <a class="navbar-brand font-playfair fw-bold text-gold" href="{{ url_for('index') }}" aria-label="The Mithlanchal Home">The Mithlanchal</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}">Home</a>
+                        <a class="nav-link text-gold font-poppins" href="{{ url_for('index') }}" aria-label="Home Page">Home</a>
                     </li>
                     {% if current_user.is_authenticated %}
                         <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('cart') }}">Cart</a>
+                            <a class="nav-link text-gold font-poppins" href="{{ url_for('cart') }}" aria-label="Cart">Cart</a>
                         </li>
                         {% if current_user.is_admin %}
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('admin') }}">Admin</a>
+                                <a class="nav-link text-gold font-poppins" href="{{ url_for('admin') }}" aria-label="Admin Dashboard">Admin</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-gold font-poppins" href="{{ url_for('admin_discounts') }}" aria-label="Manage Discounts">Discounts</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-gold font-poppins" href="{{ url_for('admin_orders') }}" aria-label="Manage Orders">Orders</a>
                             </li>
                         {% endif %}
                         <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                            <a class="nav-link text-gold font-poppins" href="{{ url_for('orders') }}" aria-label="My Orders">My Orders</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-gold font-poppins" href="{{ url_for('account') }}" aria-label="My Account">My Account</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-gold font-poppins" href="{{ url_for('logout') }}" aria-label="Logout">Logout</a>
                         </li>
                     {% else %}
                         <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+                            <a class="nav-link text-gold font-poppins" href="{{ url_for('login') }}" aria-label="Login">Login</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('signup') }}">Sign Up</a>
+                            <a class="nav-link text-gold font-poppins" href="{{ url_for('signup') }}" aria-label="Sign Up">Sign Up</a>
                         </li>
                     {% endif %}
-                    {% if current_user.is_authenticated %}
-    <li class="nav-item">
-        <a class="nav-link" href="{{ url_for('orders') }}">My Orders</a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ url_for('account') }}">My Account</a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
-    </li>
-{% else %}
-    <li class="nav-item">
-        <a class="nav-link" href="{{ url_for('login') }}">Login</a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="{{ url_for('signup') }}">Sign Up</a>
-    </li>
-{% endif %}
                 </ul>
             </div>
         </div>
     </nav>
-    <div class="container">
-        {% with messages = get_flashed_messages() %}
+
+    <div class="container mt-5">
+        {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                {% for message in messages %}
-                    <div class="alert alert-warning">{{ message }}</div>
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category == 'danger' and 'danger' or 'warning' }} alert-dismissible fade show font-poppins" role="alert" aria-label="Flash message: {{ message }}">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close flash message"></button>
+                    </div>
                 {% endfor %}
             {% endif %}
         {% endwith %}
         {% block content %}{% endblock %}
     </div>
+
+    <footer class="bg-maroon text-gold py-4 mt-5">
+        <div class="container text-center">
+            <p class="font-playfair mb-1">© 2025 The Mithlanchal. All Rights Reserved.</p>
+            <p class="font-poppins">
+                <a href="{{ url_for('privacy') }}" class="text-gold text-decoration-none mx-2" aria-label="Privacy Policy">Privacy Policy</a> |
+                <a href="{{ url_for('terms') }}" class="text-gold text-decoration-none mx-2" aria-label="Terms of Service">Terms of Service</a>
+            </p>
+        </div>
+    </footer>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

@@ -2,45 +2,69 @@
 {% block title %}Admin Dashboard{% endblock %}
 {% block content %}
 <div class="container my-5">
-    <h1>Admin Dashboard</h1>
-    <h2>Add Product</h2>
+    <h1 class="font-playfair">Admin Dashboard</h1>
+    <h2 class="font-playfair">Add Product</h2>
     <form method="POST" enctype="multipart/form-data" action="{{ url_for('admin') }}">
         {{ form.csrf_token }}
         <div class="mb-3">
-            <label for="name" class="form-label">Product Name</label>
-            <input type="text" class="form-control" id="name" name="name" required value="{{ form.name.data or '' }}" aria-label="Product name">
+            {{ form.name.label(class="form-label font-poppins") }}
+            {{ form.name(class="form-control") }}
+            {% if form.name.errors %}
+                <div class="text-danger font-poppins">
+                    {% for error in form.name.errors %}
+                        <small>{{ error }}</small><br>
+                    {% endfor %}
+                </div>
+            {% endif %}
         </div>
         <div class="mb-3">
-            <label for="price" class="form-label">Price</label>
-            <input type="number" step="0.01" class="form-control" id="price" name="price" required value="{{ form.price.data or '' }}" aria-label="Price">
+            {{ form.price.label(class="form-label font-poppins") }}
+            {{ form.price(class="form-control", step="0.01") }}
+            {% if form.price.errors %}
+                <div class="text-danger font-poppins">
+                    {% for error in form.price.errors %}
+                        <small>{{ error }}</small><br>
+                    {% endfor %}
+                </div>
+            {% endif %}
         </div>
         <div class="mb-3">
-            <label for="description" class="form-label">Description</label>
-            <textarea class="form-control" id="description" name="description" aria-label="Description">{{ form.description.data or '' }}</textarea>
+            {{ form.description.label(class="form-label font-poppins") }}
+            {{ form.description(class="form-control") }}
+            {% if form.description.errors %}
+                <div class="text-danger font-poppins">
+                    {% for error in form.description.errors %}
+                        <small>{{ error }}</small><br>
+                    {% endfor %}
+                </div>
+            {% endif %}
         </div>
         <div class="mb-3">
-            <label for="category" class="form-label">Category</label>
-            <select class="form-select" id="category" name="category" aria-label="Category">
-                <option value="puja" {% if form.category.data == 'puja' %}selected{% endif %}>Puja Items</option>
-                <option value="saree" {% if form.category.data == 'saree' %}selected{% endif %}>Sarees</option>
-                <option value="other" {% if form.category.data == 'other' %}selected{% endif %}>Other</option>
-            </select>
+            {{ form.category.label(class="form-label font-poppins") }}
+            {{ form.category(class="form-select") }}
+            {% if form.category.errors %}
+                <div class="text-danger font-poppins">
+                    {% for error in form.category.errors %}
+                        <small>{{ error }}</small><br>
+                    {% endfor %}
+                </div>
+            {% endif %}
         </div>
         <div class="mb-3">
-            <label for="image" class="form-label">Image</label>
+            <label for="image" class="form-label font-poppins">Image</label>
             <input type="file" class="form-control" id="image" name="image" aria-label="Product image">
         </div>
-        <button type="submit" class="btn btn-primary">Add Product</button>
+        {{ form.submit(class="btn btn-primary") }}
     </form>
-    <h2 class="mt-5">Products</h2>
+    <h2 class="mt-5 font-playfair">Products</h2>
     {% if products %}
         <table class="table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Price</th>
-                    <th>Category</th>
-                    <th>Image</th>
+                    <th scope="col" aria-label="Product Name">Name</th>
+                    <th scope="col" aria-label="Product Price">Price</th>
+                    <th scope="col" aria-label="Product Category">Category</th>
+                    <th scope="col" aria-label="Product Image">Image</th>
                 </tr>
             </thead>
             <!--Start of Tawk.to Script-->
@@ -59,14 +83,14 @@
             <tbody>
                 {% for product in products %}
                     <tr>
-                        <td>{{ product.name }}</td>
-                        <td>₹{{ product.price }}</td>
-                        <td>{{ product.category|title or 'None' }}</td>
+                        <td class="font-poppins">{{ product.name }}</td>
+                        <td class="font-poppins">₹{{ product.price|round(2) }}</td>
+                        <td class="font-poppins">{{ product.category|title or 'None' }}</td>
                         <td>
                             {% if product.image %}
-                                <img src="{{ url_for('static', filename=product.image) }}" width="50" alt="{{ product.name }}">
+                                <img src="{{ url_for('static', filename=product.image) }}" width="50" alt="{{ product.name }}" aria-label="Image of {{ product.name }}">
                             {% else %}
-                                No Image
+                                <span class="font-poppins">No Image</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -74,8 +98,9 @@
             </tbody>
         </table>
     {% else %}
-        <p>No products yet.</p>
+        <p class="font-poppins">No products yet.</p>
     {% endif %}
-    <a href="{{ url_for('admin_discounts') }}" class="btn btn-secondary mt-3">Manage Discounts</a>
+    <a href="{{ url_for('admin_discounts') }}" class="btn btn-secondary mt-3" aria-label="Manage Discounts">Manage Discounts</a>
+    <a href="{{ url_for('admin_orders') }}" class="btn btn-secondary mt-3" aria-label="Manage Orders">Manage Orders</a>
 </div>
 {% endblock %}
