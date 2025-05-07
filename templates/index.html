@@ -69,22 +69,24 @@
             {% for product in products %}
                 <div class="col-md-4 mb-4">
                     <div class="card h-100">
-                        {% if product.image %}
-                            <img src="{{ url_for('static', filename=product.image) }}" class="card-img-top" alt="{{ product.name }}" aria-label="Image of {{ product.name }}">
-                        {% else %}
-                            <img src="{{ url_for('static', filename='images/placeholder.jpg') }}" class="card-img-top" alt="Placeholder" aria-label="Placeholder image">
-                        {% endif %}
-                        <div class="card-body">
+                        <div style="height: 200px; overflow: hidden;">
+                            {% if product.image %}
+                                <img src="{{ url_for('static', filename=product.image) }}" class="card-img-top" alt="{{ product.name }}" style="height: 200px; width: 100%; object-fit: cover;" aria-label="Image of {{ product.name }}">
+                            {% else %}
+                                <img src="{{ url_for('static', filename='images/placeholder.jpg') }}" class="card-img-top" alt="Placeholder" style="height: 200px; width: 100%; object-fit: cover;" aria-label="Placeholder image">
+                            {% endif %}
+                        </div>
+                        <div class="card-body d-flex flex-column">
                             <h5 class="card-title font-playfair">{{ product.name }}</h5>
                             <p class="card-text font-poppins">₹{{ product.price|round(2) }}</p>
-                            <p class="card-text font-poppins">{{ product.description|truncate(100) }}</p>
-                            <a href="{{ url_for('product', id=product.id) }}" class="btn btn-primary" aria-label="View product {{ product.name }}">View Product</a>
+                            <p class="card-text font-poppins flex-grow-1">{{ product.description|truncate(100) }}</p>
+                            <a href="{{ url_for('product', id=product.id) }}" class="btn btn-primary mb-2" aria-label="View product {{ product.name }}">View Product</a>
                             {% if current_user.is_authenticated %}
                                 <form method="POST" action="{{ url_for('cart') }}" class="d-inline" id="add-to-cart-form-{{ product.id }}">
                                     {{ form.csrf_token if form else '' }}
                                     <input type="hidden" name="product_id" value="{{ product.id }}">
                                     <input type="hidden" name="quantity" value="1">
-                                    <button type="submit" class="btn btn-secondary mt-2" id="add-to-cart-btn-{{ product.id }}" aria-label="Add {{ product.name }} to cart">Add to Cart</button>
+                                    <button type="submit" class="btn btn-secondary" id="add-to-cart-btn-{{ product.id }}" aria-label="Add {{ product.name }} to cart">Add to Cart</button>
                                     <span id="loading-spinner-{{ product.id }}" class="spinner-border spinner-border-sm text-gold ms-2 d-none" role="status" aria-hidden="true"></span>
                                 </form>
                             {% endif %}
@@ -99,14 +101,17 @@
 </div>
 
 <script>
-    {% for product in products %}
-        document.getElementById('add-to-cart-form-{{ product.id }}').onsubmit = function() {
-            const button = document.getElementById('add-to-cart-btn-{{ product.id }}');
-            const spinner = document.getElementById('loading-spinner-{{ product.id }}');
-            button.disabled = true;
-            button.innerText = 'Adding...';
-            spinner.classList.remove('d-none');
-        };
-    {% endfor %}
+    // Only add event listeners if there are products
+    {% if products %}
+        {% for product in products %}
+            document.getElementById('add-to-cart-form-{{ product.id }}').onsubmit = function() {
+                const button = document.getElementById('add-to-cart-btn-{{ product.id }}');
+                const spinner = document.getElementById('loading-spinner-{{ product.id }}');
+                button.disabled = true;
+                button.innerText = 'Adding...';
+                spinner.classList.remove('d-none');
+            };
+        {% endfor %}
+    {% endif %}
 </script>
 {% endblock %}
