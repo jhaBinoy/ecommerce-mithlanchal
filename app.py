@@ -26,6 +26,7 @@ from flask_wtf import CSRFProtect
 from sqlalchemy.orm import joinedload
 from sqlalchemy.sql import text
 from flask_migrate import Migrate
+import logging
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', os.urandom(24).hex())
@@ -45,7 +46,6 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Initialize logging
-import logging
 logging.basicConfig(level=logging.DEBUG)
 app.logger.setLevel(logging.DEBUG)
 
@@ -189,8 +189,8 @@ def index():
         products = products_query.all()
         categories = db.session.query(Product.category).distinct().all()
         categories = [c[0] for c in categories if c[0]]
-    form = CartForm()  # Add this line
-    return render_template('index.html', products=products, categories=categories)
+    form = CartForm()
+    return render_template('index.html', products=products, categories=categories, form=form)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -249,6 +249,7 @@ def signup():
 @login_required
 def admin():
     if not current_user.is_admin:
+        flash('You do not have permission to access this page.', 'danger')
         return redirect(url_for('index'))
     form = AddProductForm()
     if request.method == 'POST':
@@ -264,7 +265,10 @@ def admin():
                 filename = f"{uuid.uuid4().hex}{ext}"
                 filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 img = Image.open(image)
-                img.thumbnail((800, 800))
+                # Resize image to 300x300 pixels while maintaining aspect ratio
+                img.thumbnail((300, 300), Image.Resampling.LANCZOS)
+                # Ensure the image is exactly 300x300 by cropping if necessary
+                img = img.resize((300, 300), Image.Resampling.LANCZOS)
                 img.save(filepath, quality=85)
                 filename = os.path.join('uploads', filename)
             with app.app_context():
@@ -758,6 +762,63 @@ def generate_invoice(order_id):
         mimetype='application/pdf',
         headers={'Content-Disposition': f'attachment;filename=invoice_{order.id}.pdf'}
     )
+
+@app.route('/cancel_order/<int:order_id>', methods=['GET'])
+@login_required
+def cancel_order(order_id):
+    with app.app_context():
+        order = db.session.query(Order).get_or_404(order_id)
+        # Check if the order belongs to the current user
+        if order.user_id != current_user.id:
+            flash('You are not authorized to cancel this order.', 'danger')
+            return redirect(url_for('orders'))
+        
+        # Check if the order can be cancelled (only pending or processing orders)
+        if order.status not in ['pending', 'processing']:
+            flash('This order cannot be cancelled as it is already ' + order.status + '.', 'danger')
+            return redirect(url_for('order_confirmation', order_id=order.id))
+        
+        # Update the order status to cancelled
+        order.status = 'cancelled'
+        db.session.commit()
+        
+        # Send email notification to user
+        try:
+            items_list = ''
+            for item in order.order_items:
+                items_list += f'- {item.product.name} (x{item.quantity}): ₹{item.price * item.quantity:.2f}\n'
+            msg = Message(
+                subject=f"The Mithlanchal - Order #{order.id} Cancelled",
+                recipients=[order.email],
+                body=f"""
+Dear Customer,
+
+Your order has been cancelled as per your request.
+
+Order #{order.id}
+Date: {order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else 'Not available'}
+Status: Cancelled
+Total: ₹{order.total:.2f}
+{f'Discount: ₹{order.discount_applied:.2f}' if order.discount_applied > 0 else ''}
+Shipping Address: {order.shipping_address}
+Mobile: {order.mobile_number}
+
+Items:
+{items_list}
+
+If you have any questions, please contact us.
+
+Best,
+The Mithlanchal Team
+"""
+            )
+            mail.send(msg)
+            flash('Order has been cancelled successfully, and a confirmation email has been sent.', 'success')
+        except Exception as e:
+            app.logger.error(f"Email notification failed: {e}")
+            flash('Order has been cancelled successfully, but email notification failed.', 'warning')
+    
+    return redirect(url_for('order_confirmation', order_id=order.id))
 
 @app.route('/privacy')
 def privacy():
