@@ -69,7 +69,7 @@
             {% for product in products %}
                 <div class="col-md-3 mb-4">
                     <div class="card h-100">
-                        <div style="height: 250px; overflow: hidden;">
+                        <div style="height: 200px; overflow: hidden;">
                             {% if product.image %}
                                 <img src="{{ url_for('static', filename=product.image) }}" class="card-img-top zoomable-image" alt="{{ product.name }}" style="height: 250px; width: 100%; object-fit: cover; object-position: center;" aria-label="Image of {{ product.name }}" data-product-id="{{ product.id }}">
                             {% else %}
