@@ -37,7 +37,7 @@
             document.addEventListener('DOMContentLoaded', function() {
                 const options = {
                     key: '{{ razorpay_key }}',
-                    amount: {{ order.amount }},
+                    amount: { order,amount },
                     currency: 'INR',
                     order_id: '{{ order.id }}',
                     name: 'The Mithlanchal',
