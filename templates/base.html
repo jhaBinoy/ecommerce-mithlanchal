@@ -7,6 +7,22 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .product-img {
+            width: 100%;
+            height: 250px;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+        .product-img:hover {
+            transform: scale(1.1);
+        }
+        .banner-img {
+            width: 100%;
+            height: 400px;
+            object-fit: cover;
+        }
+    </style>
 </head>
 <body class="bg-cream">
     <nav class="navbar navbar-expand-lg navbar-dark bg-maroon shadow-sm">
@@ -24,6 +40,9 @@
                         <li class="nav-item">
                             <a class="nav-link text-gold font-poppins" href="{{ url_for('cart') }}" aria-label="Cart">Cart</a>
                         </li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('orders') }}">Orders</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('account') }}">Account</a></li>
+                        
                         {% if current_user.is_admin %}
                             <li class="nav-item">
                                 <a class="nav-link text-gold font-poppins" href="{{ url_for('admin') }}" aria-label="Admin Dashboard">Admin</a>
