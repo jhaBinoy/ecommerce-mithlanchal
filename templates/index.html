@@ -8,7 +8,34 @@
 
     <!-- Product Carousel -->
     {% if products %}
-        <div id="productCarousel" class="carousel slide mb-5 shadow-lg rounded" data-bs-ride="carousel">
+        <!-- <div id="productCarousel" class="carousel slide mb-5 shadow-lg rounded" data-bs-ride="carousel">
+            <div class="carousel-indicators">
+                {% for product in products[:3] %}
+                    <button type="button" data-bs-target="#productCarousel" data-bs-slide-to="{{ loop.index0 }}" class="{% if loop.first %}active{% endif %}" aria-current="{% if loop.first %}true{% endif %}" aria-label="Slide to product {{ product.name }}"></button>
+                {% endfor %}
+            </div>
+            <div class="carousel-inner">
+                {% for product in products[:3] %}
+                    <div class="carousel-item {% if loop.first %}active{% endif %}">
+                        <img src="{{ url_for('static', filename=product.image) if product.image else url_for('static', filename='images/placeholder.jpg') }}" class="d-block w-100" alt="{{ product.name }}" style="height: 400px; object-fit: cover;" aria-label="Image of {{ product.name }}">
+                        <div class="carousel-caption d-none d-md-block bg-maroon bg-opacity-75 rounded p-3">
+                            <h5 class="font-playfair text-gold">{{ product.name }}</h5>
+                            <p class="font-poppins text-cream">₹{{ product.price|round(2) }}</p>
+                            <a href="{{ url_for('product', id=product.id) }}" class="btn btn-primary btn-sm" aria-label="View product {{ product.name }}">View Product</a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+            <button class="carousel-control-prev" type="button" data-bs-target="#productCarousel" data-bs-slide="prev" aria-label="Previous product slide">
+                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                <span class="visually-hidden">Previous</span>
+            </button>
+            <button class="carousel-control-next" type="button" data-bs-target="#productCarousel" data-bs-slide="next" aria-label="Next product slide">
+                <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                <span class="visually-hidden">Next</span>
+            </button>
+        </div> -->
+        <div id="productCarousel" class="carousel slide mb-5 shadow-lg rounded" data-bs-ride="carousel" data-bs-interval="3000">
             <div class="carousel-indicators">
                 {% for product in products[:3] %}
                     <button type="button" data-bs-target="#productCarousel" data-bs-slide-to="{{ loop.index0 }}" class="{% if loop.first %}active{% endif %}" aria-current="{% if loop.first %}true{% endif %}" aria-label="Slide to product {{ product.name }}"></button>
@@ -103,8 +130,8 @@
 <!-- Note: This template must be rendered by Flask. Do not open this file directly in the browser (e.g., via file://). Run your Flask app and access via http://127.0.0.1:5000/ -->
 <script>
     // Only add event listeners if there are products
-    {% if products %}
-        {% for product in products %}
+    ('{% if products %}')
+        ('{% for product in products %}')
             document.getElementById('add-to-cart-form-{{ product.id }}').onsubmit = function() {
                 const button = document.getElementById('add-to-cart-btn-{{ product.id }}');
                 const spinner = document.getElementById('loading-spinner-{{ product.id }}');
@@ -112,7 +139,7 @@
                 button.innerText = 'Adding...';
                 spinner.classList.remove('d-none');
             };
-        {% endfor %}
-    {% endif %}
+        ('{% endfor %}')
+    ('{% endif %}')
 </script>
 {% endblock %}

@@ -1,6 +1,6 @@
 # Exported from Render on 2025-05-17T19:32:38Z
 databases:
-- name: mithlanchal-db
+- name: mithlanchal-dbv2
   databaseName: store_lt18
   user: admin
   plan: free

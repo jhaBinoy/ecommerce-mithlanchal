@@ -30,7 +30,8 @@ import logging
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', os.urandom(24).hex())
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'postgresql://admin:gv64uAaltfP9OVOVvlNtt6dnC31PXqZR@dpg-d01bdjre5dus73e3bptg-a.oregon-postgres.render.com/store_lt18?sslmode=require')
+#app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'postgresql://admin:gv64uAaltfP9OVOVvlNtt6dnC31PXqZR@dpg-d01bdjre5dus73e3bptg-a.oregon-postgres.render.com/store_lt18?sslmode=require')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'postgresql://admin:o6EsRZd9mQaSEmS6XEKH6cloIuKyrh3c@dpg-d0lo3pogjchc73f8k8l0-a.oregon-postgres.render.com/store_lt18_sykd?sslmode=require')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
