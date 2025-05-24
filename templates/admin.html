@@ -5,7 +5,7 @@
     <h1 class="font-playfair">Admin Dashboard</h1>
     <h2 class="font-playfair">Add Product</h2>
     <form method="POST" enctype="multipart/form-data" action="{{ url_for('admin') }}">
-        {{ form.csrf_token }}
+        {{ form.hidden_tag() }}
         <div class="mb-3">
             {{ form.name.label(class="form-label font-poppins") }}
             {{ form.name(class="form-control") }}
@@ -51,8 +51,15 @@
             {% endif %}
         </div>
         <div class="mb-3">
-            <label for="image" class="form-label font-poppins">Image</label>
-            <input type="file" class="form-control" id="image" name="image" aria-label="Product image">
+            {{ form.images.label(class="form-label font-poppins") }}
+            {{ form.images(class="form-control", multiple=True, accept="image/*") }}
+            {% if form.images.errors %}
+                <div class="text-danger font-poppins">
+                    {% for error in form.images.errors %}
+                        <small>{{ error }}</small><br>
+                    {% endfor %}
+                </div>
+            {% endif %}
         </div>
         {{ form.submit(class="btn btn-primary") }}
     </form>
@@ -64,22 +71,10 @@
                     <th scope="col" aria-label="Product Name">Name</th>
                     <th scope="col" aria-label="Product Price">Price</th>
                     <th scope="col" aria-label="Product Category">Category</th>
-                    <th scope="col" aria-label="Product Image">Image</th>
+                    <th scope="col" aria-label="Product Images">Images</th>
+                    <th scope="col" aria-label="Actions">Actions</th>
                 </tr>
             </thead>
-            <!--Start of Tawk.to Script-->
-            <script type="text/javascript">
-                var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
-                (function(){
-                var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
-                s1.async=true;
-                s1.src='https://embed.tawk.to/68024700c5a0bc1911588f2e/1ip4eanet';
-                s1.charset='UTF-8';
-                s1.setAttribute('crossorigin','*');
-                s0.parentNode.insertBefore(s1,s0);
-                })();
-            </script>
-            <!--End of Tawk.to Script-->
             <tbody>
                 {% for product in products %}
                     <tr>
@@ -87,11 +82,22 @@
                         <td class="font-poppins">₹{{ product.price|round(2) }}</td>
                         <td class="font-poppins">{{ product.category|title or 'None' }}</td>
                         <td>
-                            {% if product.image %}
-                                <img src="{{ url_for('static', filename=product.image) }}" width="50" alt="{{ product.name }}" aria-label="Image of {{ product.name }}">
+                            {% if product_image_urls[product.id] and product_image_urls[product.id]|length > 0 %}
+                                {% for url in product_image_urls[product.id] %}
+                                    <img src="{{ url }}" 
+                                         width="50" alt="{{ product.name }} image {{ loop.index }}" 
+                                         aria-label="Image of {{ product.name }}"
+                                         onerror="this.style.display='none';">
+                                    <p class="debug d-none">Debug URL: {{ url }}</p>
+                                {% endfor %}
                             {% else %}
-                                <span class="font-poppins">No Image</span>
+                                <span class="font-poppins">No Images</span>
+                                <p class="debug d-none">Debug: No images for product</p>
                             {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('edit_product', product_id=product.id) }}" class="btn btn-sm btn-primary" aria-label="Edit product {{ product.name }}">Edit</a>
+                            <a href="{{ url_for('delete_product', product_id=product.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this product?');" aria-label="Delete product {{ product.name }}">Delete</a>
                         </td>
                     </tr>
                 {% endfor %}
@@ -103,4 +109,15 @@
     <a href="{{ url_for('admin_discounts') }}" class="btn btn-secondary mt-3" aria-label="Manage Discounts">Manage Discounts</a>
     <a href="{{ url_for('admin_orders') }}" class="btn btn-secondary mt-3" aria-label="Manage Orders">Manage Orders</a>
 </div>
+<script type="text/javascript">
+    var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
+    (function(){
+    var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
+    s1.async=true;
+    s1.src='https://embed.tawk.to/68024700c5a0bc1911588f2e/1ip4eanet';
+    s1.charset='UTF-8';
+    s1.setAttribute('crossorigin','*');
+    s0.parentNode.insertBefore(s1,s0);
+    })();
+</script>
 {% endblock %}

@@ -1,40 +1,9 @@
 {% extends 'base.html' %}
-
 {% block title %}The Mithlanchal - Home{% endblock %}
-
 {% block content %}
 <div class="container mt-5">
     <h1 class="text-center mb-4 font-playfair">Welcome to The Mithlanchal</h1>
-
-    <!-- Product Carousel -->
     {% if products %}
-        <!-- <div id="productCarousel" class="carousel slide mb-5 shadow-lg rounded" data-bs-ride="carousel">
-            <div class="carousel-indicators">
-                {% for product in products[:3] %}
-                    <button type="button" data-bs-target="#productCarousel" data-bs-slide-to="{{ loop.index0 }}" class="{% if loop.first %}active{% endif %}" aria-current="{% if loop.first %}true{% endif %}" aria-label="Slide to product {{ product.name }}"></button>
-                {% endfor %}
-            </div>
-            <div class="carousel-inner">
-                {% for product in products[:3] %}
-                    <div class="carousel-item {% if loop.first %}active{% endif %}">
-                        <img src="{{ url_for('static', filename=product.image) if product.image else url_for('static', filename='images/placeholder.jpg') }}" class="d-block w-100" alt="{{ product.name }}" style="height: 400px; object-fit: cover;" aria-label="Image of {{ product.name }}">
-                        <div class="carousel-caption d-none d-md-block bg-maroon bg-opacity-75 rounded p-3">
-                            <h5 class="font-playfair text-gold">{{ product.name }}</h5>
-                            <p class="font-poppins text-cream">₹{{ product.price|round(2) }}</p>
-                            <a href="{{ url_for('product', id=product.id) }}" class="btn btn-primary btn-sm" aria-label="View product {{ product.name }}">View Product</a>
-                        </div>
-                    </div>
-                {% endfor %}
-            </div>
-            <button class="carousel-control-prev" type="button" data-bs-target="#productCarousel" data-bs-slide="prev" aria-label="Previous product slide">
-                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                <span class="visually-hidden">Previous</span>
-            </button>
-            <button class="carousel-control-next" type="button" data-bs-target="#productCarousel" data-bs-slide="next" aria-label="Next product slide">
-                <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                <span class="visually-hidden">Next</span>
-            </button>
-        </div> -->
         <div id="productCarousel" class="carousel slide mb-5 shadow-lg rounded" data-bs-ride="carousel" data-bs-interval="3000">
             <div class="carousel-indicators">
                 {% for product in products[:3] %}
@@ -44,27 +13,33 @@
             <div class="carousel-inner">
                 {% for product in products[:3] %}
                     <div class="carousel-item {% if loop.first %}active{% endif %}">
-                        <img src="{{ url_for('static', filename=product.image) if product.image else url_for('static', filename='images/placeholder.jpg') }}" class="d-block w-100" alt="{{ product.name }}" style="height: 400px; object-fit: cover;" aria-label="Image of {{ product.name }}">
+                        {% if product_image_urls[product.id] and product_image_urls[product.id]|length > 0 %}
+                            <img src="{{ product_image_urls[product.id][0] }}" 
+                                 class="d-block w-100" alt="{{ product.name }}" style="height: 400px; object-fit: cover;" 
+                                 aria-label="Image of {{ product.name }}"
+                                 onerror="this.style.display='none';">
+                            <p class="debug d-none">Debug URL: {{ product_image_urls[product.id][0] }}</p>
+                        {% else %}
+                            <p class="debug d-none">Debug: No image for product {{ product.name }}</p>
+                        {% endif %}
                         <div class="carousel-caption d-none d-md-block bg-maroon bg-opacity-75 rounded p-3">
                             <h5 class="font-playfair text-gold">{{ product.name }}</h5>
                             <p class="font-poppins text-cream">₹{{ product.price|round(2) }}</p>
-                            <a href="{{ url_for('product', id=product.id) }}" class="btn btn-primary btn-sm" aria-label="View product {{ product.name }}">View Product</a>
+                            <a href="{{ url_for('product', product_id=product.id) }}" class="btn btn-primary btn-sm" aria-label="View product {{ product.name }}">View Product</a>
                         </div>
                     </div>
                 {% endfor %}
             </div>
-            <button class="carousel-control-prev" type="button" data-bs-target="#productCarousel" data-bs-slide="prev" aria-label="Previous product slide">
+            <button class="carousel-control-prev" type="button" data-bs-target="#productCarousel" data-bs-slide="prev" aria-label="Previous slide">
                 <span class="carousel-control-prev-icon" aria-hidden="true"></span>
                 <span class="visually-hidden">Previous</span>
             </button>
-            <button class="carousel-control-next" type="button" data-bs-target="#productCarousel" data-bs-slide="next" aria-label="Next product slide">
+            <button class="carousel-control-next" type="button" data-bs-target="#productCarousel" data-bs-slide="next" aria-label="Next slide">
                 <span class="carousel-control-next-icon" aria-hidden="true"></span>
                 <span class="visually-hidden">Next</span>
             </button>
         </div>
     {% endif %}
-
-    <!-- Search and Filter Form -->
     <form method="GET" action="{{ url_for('index') }}" class="mb-4">
         <div class="row">
             <div class="col-md-3">
@@ -89,34 +64,27 @@
             </div>
         </div>
     </form>
-
-    <!-- Product Listing -->
     <div class="row">
         {% if products %}
             {% for product in products %}
                 <div class="col-md-3 mb-4">
                     <div class="card h-100">
                         <div style="height: 200px; overflow: hidden;">
-                            {% if product.image %}
-                                <img src="{{ url_for('static', filename=product.image) }}" class="card-img-top zoomable-image" alt="{{ product.name }}" style="height: 250px; width: 100%; object-fit: cover; object-position: center;" aria-label="Image of {{ product.name }}" data-product-id="{{ product.id }}">
+                            {% if product_image_urls[product.id] and product_image_urls[product.id]|length > 0 %}
+                                <img src="{{ product_image_urls[product.id][0] }}" 
+                                     class="card-img-top zoomable-image" alt="{{ product.name }}" 
+                                     style="height: 250px; width: 100%; object-fit: cover; object-position: center;" 
+                                     aria-label="Image of {{ product.name }}" data-product-id="{{ product.id }}"
+                                     onerror="this.style.display='none';">
+                                <p class="debug d-none">Debug URL: {{ product_image_urls[product.id][0] }}</p>
                             {% else %}
-                                <img src="{{ url_for('static', filename='images/placeholder.jpg') }}" class="card-img-top zoomable-image" alt="Placeholder" style="height: 250px; width: 100%; object-fit: cover; object-position: center;" aria-label="Placeholder image" data-product-id="placeholder-{{ loop.index }}">
+                                <p class="debug d-none">Debug: No image for product {{ product.name }}</p>
                             {% endif %}
                         </div>
-                        <div class="card-body d-flex flex-column">
+                        <div class="card-body text-center">
                             <h5 class="card-title font-playfair">{{ product.name }}</h5>
                             <p class="card-text font-poppins">₹{{ product.price|round(2) }}</p>
-                            <p class="card-text font-poppins flex-grow-1">{{ product.description|truncate(100) }}</p>
-                            <a href="{{ url_for('product', id=product.id) }}" class="btn btn-primary mb-2" aria-label="View product {{ product.name }}">View Product</a>
-                            {% if current_user.is_authenticated %}
-                                <form method="POST" action="{{ url_for('cart') }}" class="d-inline" id="add-to-cart-form-{{ product.id }}">
-                                    {{ form.csrf_token if form else '' }}
-                                    <input type="hidden" name="product_id" value="{{ product.id }}">
-                                    <input type="hidden" name="quantity" value="1">
-                                    <button type="submit" class="btn btn-secondary" id="add-to-cart-btn-{{ product.id }}" aria-label="Add {{ product.name }} to cart">Add to Cart</button>
-                                    <span id="loading-spinner-{{ product.id }}" class="spinner-border spinner-border-sm text-gold ms-2 d-none" role="status" aria-hidden="true"></span>
-                                </form>
-                            {% endif %}
+                            <a href="{{ url_for('product', product_id=product.id) }}" class="btn btn-primary btn-sm" aria-label="View product {{ product.name }}">View Product</a>
                         </div>
                     </div>
                 </div>
@@ -126,20 +94,17 @@
         {% endif %}
     </div>
 </div>
-
-<!-- Note: This template must be rendered by Flask. Do not open this file directly in the browser (e.g., via file://). Run your Flask app and access via http://127.0.0.1:5000/ -->
 <script>
-    // Only add event listeners if there are products
-    ('{% if products %}')
-        ('{% for product in products %}')
-            document.getElementById('add-to-cart-form-{{ product.id }}').onsubmit = function() {
+    {% if products %}
+        {% for product in products %}
+            document.getElementById('add-to-cart-form-{{ product.id }}') && (document.getElementById('add-to-cart-form-{{ product.id }}').onsubmit = function() {
                 const button = document.getElementById('add-to-cart-btn-{{ product.id }}');
                 const spinner = document.getElementById('loading-spinner-{{ product.id }}');
                 button.disabled = true;
                 button.innerText = 'Adding...';
                 spinner.classList.remove('d-none');
-            };
-        ('{% endfor %}')
-    ('{% endif %}')
+            });
+        {% endfor %}
+    {% endif %}
 </script>
 {% endblock %}

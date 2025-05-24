@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}Edit Product{% endblock %}
+{% block content %}
+<div class="container my-5">
+    <h1 class="font-playfair">Edit Product</h1>
+    <form method="POST" enctype="multipart/form-data" action="{{ url_for('edit_product', product_id=product.id) }}">
+        {{ form.hidden_tag() }}
+        <div class="mb-3">
+            {{ form.name.label(class="form-label font-poppins") }}
+            {{ form.name(class="form-control") }}
+            {% for error in form.name.errors %}
+                <span class="text-danger font-poppins">{{ error }}</span>
+            {% endfor %}
+        </div>
+        <div class="mb-3">
+            {{ form.price.label(class="form-label font-poppins") }}
+            {{ form.price(class="form-control", step="0.01") }}
+            {% for error in form.price.errors %}
+                <span class="text-danger font-poppins">{{ error }}</span>
+            {% endfor %}
+        </div>
+        <div class="mb-3">
+            {{ form.description.label(class="form-label font-poppins") }}
+            {{ form.description(class="form-control") }}
+            {% for error in form.description.errors %}
+                <span class="text-danger font-poppins">{{ error }}</span>
+            {% endfor %}
+        </div>
+        <div class="mb-3">
+            {{ form.category.label(class="form-label font-poppins") }}
+            {{ form.category(class="form-select") }}
+            {% for error in form.category.errors %}
+                <span class="text-danger font-poppins">{{ error }}</span>
+            {% endfor %}
+        </div>
+        <div class="mb-3">
+            {{ form.images.label(class="form-label font-poppins") }}
+            {{ form.images(class="form-control", multiple=True, accept="image/*") }}
+            {% for error in form.images.errors %}
+                <span class="text-danger font-poppins">{{ error }}</span>
+            {% endfor %}
+        </div>
+        <h3 class="font-playfair">Current Images</h3>
+        {% if image_urls %}
+            {% for url, image_id in image_urls|zip(image_ids) %}
+                <div class="mb-3">
+                    <img src="{{ url }}" width="100" alt="Product image" aria-label="Product image">
+                    <input type="checkbox" name="delete_images" value="{{ image_id }}"> Delete
+                    <label>Position:</label>
+                    <input type="number" name="position_{{ image_id }}" value="{{ loop.index0 + 1 }}" class="form-control w-25 d-inline">
+                    <p class="debug d-none">Debug URL: {{ url }}</p>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>No images available</p>
+        {% endif %}
+        {{ form.submit(class="btn btn-primary") }}
+    </form>
+    <a href="{{ url_for('admin') }}" class="btn btn-secondary mt-3">Back to Admin</a>
+</div>
+{% endblock %}

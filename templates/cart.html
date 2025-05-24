@@ -3,11 +3,11 @@
 {% block content %}
 <div class="container mt-5">
     <h2 class="font-playfair mb-4">Your Cart</h2>
-
     {% if cart_items %}
         <table class="table table-striped">
             <thead>
                 <tr>
+                    <th scope="col" aria-label="Product Image">Image</th>
                     <th scope="col" aria-label="Product Name">Product</th>
                     <th scope="col" aria-label="Product Price">Price</th>
                     <th scope="col" aria-label="Quantity">Quantity</th>
@@ -18,6 +18,17 @@
             <tbody>
                 {% for item in cart_items %}
                     <tr data-cart-item-id="{{ item.id }}">
+                        <td>
+                            {% if cart_image_urls[item.product.id] and cart_image_urls[item.product.id]|length > 0 %}
+                                <img src="{{ cart_image_urls[item.product.id][0] }}" 
+                                     width="50" alt="{{ item.product.name }}" 
+                                     aria-label="Image of {{ item.product.name }}"
+                                     onerror="this.style.display='none';">
+                                <p class="debug d-none">Debug URL: {{ cart_image_urls[item.product.id][0] }}</p>
+                            {% else %}
+                                <span class="font-poppins">No Image</span>
+                            {% endif %}
+                        </td>
                         <td class="font-poppins">{{ item.product.name }}</td>
                         <td class="font-poppins">₹{{ item.product.price|round(2) }}</td>
                         <td class="font-poppins flex items-center">
@@ -57,12 +68,10 @@
         <a href="{{ url_for('index') }}" class="btn btn-primary mt-2" aria-label="Continue Shopping">Continue Shopping</a>
     {% endif %}
 </div>
-
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
     $(document).ready(function() {
         const csrfToken = '{{ csrf_token() }}';
-
         $('.increase-btn').click(function() {
             const cartItemId = $(this).data('id');
             const row = $(`tr[data-cart-item-id="${cartItemId}"]`);
@@ -71,7 +80,6 @@
             const spinner = $(`#spinner-increase-${cartItemId}`);
             spinner.removeClass('d-none');
             $(this).prop('disabled', true);
-
             $.ajax({
                 url: `/cart/increase/${cartItemId}`,
                 type: 'POST',
@@ -95,7 +103,6 @@
                 }
             });
         });
-
         $('.decrease-btn').click(function() {
             const cartItemId = $(this).data('id');
             const row = $(`tr[data-cart-item-id="${cartItemId}"]`);
@@ -104,7 +111,6 @@
             const spinner = $(`#spinner-decrease-${cartItemId}`);
             spinner.removeClass('d-none');
             $(this).prop('disabled', true);
-
             $.ajax({
                 url: `/cart/decrease/${cartItemId}`,
                 type: 'POST',
@@ -135,8 +141,6 @@
                 }
             });
         });
-
-        // Helper function to display flash messages (since we're not using the original flash-messages div)
         function flashMessage(message, category) {
             const alert = $(`<div class="alert alert-${category} alert-dismissible fade show font-poppins" role="alert" aria-label="Flash message: ${message}">
                 ${message}

@@ -2,11 +2,11 @@ import os
 import uuid
 import re
 from flask import Flask, render_template, request, redirect, url_for, flash, Response, jsonify, session
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from flask_mail import Mail, Message
 from flask_wtf import FlaskForm
 from flask_wtf.csrf import CSRFProtect
-from wtforms import StringField, PasswordField, SelectField, SubmitField, TextAreaField, FloatField, IntegerField, DateField
+from wtforms import StringField, PasswordField, SelectField, SubmitField, TextAreaField, FloatField, IntegerField, DateField, FileField
 from wtforms.validators import DataRequired, Email, Length, NumberRange
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
@@ -20,20 +20,19 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from io import BytesIO
-from db import db
-from flask import Flask
-from flask_wtf import CSRFProtect
+from flask_migrate import Migrate
 from sqlalchemy.orm import joinedload
 from sqlalchemy.sql import text
-from flask_migrate import Migrate
 import logging
+from b2sdk.v2 import B2Api, InMemoryAccountInfo
+from extensions import db
+import urllib.parse
+from functools import lru_cache
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', os.urandom(24).hex())
-#app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'postgresql://admin:gv64uAaltfP9OVOVvlNtt6dnC31PXqZR@dpg-d01bdjre5dus73e3bptg-a.oregon-postgres.render.com/store_lt18?sslmode=require')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'postgresql://admin:o6EsRZd9mQaSEmS6XEKH6cloIuKyrh3c@dpg-d0lo3pogjchc73f8k8l0-a.oregon-postgres.render.com/store_lt18_sykd?sslmode=require')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
@@ -44,45 +43,70 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)
 app.config['SESSION_COOKIE_SECURE'] = False if os.getenv('FLASK_DEBUG', 'True') == 'True' else True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Initialize logging
 logging.basicConfig(level=logging.DEBUG)
 app.logger.setLevel(logging.DEBUG)
 
-# Initialize extensions
+# Backblaze B2 Configuration
+load_dotenv()
+B2_KEY_ID = os.getenv('B2_KEY_ID')
+B2_APPLICATION_KEY = os.getenv('B2_APPLICATION_KEY')
+B2_BUCKET_NAME = os.getenv('B2_BUCKET_NAME', 'mithlanchal-images')
+
+b2_api = B2Api(InMemoryAccountInfo())
+try:
+    b2_api.authorize_account("production", B2_KEY_ID, B2_APPLICATION_KEY)
+    app.logger.info("Backblaze B2 authorized successfully")
+except Exception as e:
+    app.logger.error(f"Failed to authorize Backblaze B2: {e}")
+    raise Exception(f"Backblaze B2 initialization failed: {e}")
+
+@lru_cache(maxsize=1)
+def get_bucket():
+    return b2_api.get_bucket_by_name(B2_BUCKET_NAME)
+
+bucket = get_bucket()
+
+# Initialize database
 db.init_app(app)
+migrate = Migrate(app, db)
+
+# Initialize extensions
 mail = Mail(app)
 csrf = CSRFProtect(app)
 
-load_dotenv()
 razorpay_client = razorpay.Client(auth=(os.getenv('RAZORPAY_KEY', ''), os.getenv('RAZORPAY_SECRET', '')))
 
-# Import models after db initialization
-from models import User, Product, DiscountCode, CartItem, Order, OrderItem
-migrate = Migrate(app, db)
+# Import models
+from models import User, Product, ProductImage, DiscountCode, CartItem, Order, OrderItem
 
-# Cart Update Form
+# Forms
 class CartUpdateForm(FlaskForm):
     product_id = IntegerField('Product ID', validators=[DataRequired()], render_kw={'type': 'hidden'})
     quantity = IntegerField('Quantity', validators=[DataRequired(), NumberRange(min=1)], render_kw={'aria-label': 'Quantity'})
     submit = SubmitField('Update Cart')
 
-# Cart Form for Add to Cart
 class CartForm(FlaskForm):
     product_id = IntegerField('Product ID', validators=[DataRequired()], render_kw={'type': 'hidden'})
     quantity = IntegerField('Quantity', validators=[DataRequired(), NumberRange(min=1)], default=1, render_kw={'aria-label': 'Quantity'})
     submit = SubmitField('Add to Cart')
 
-# Add Product Form
 class AddProductForm(FlaskForm):
     name = StringField('Product Name', validators=[DataRequired()], render_kw={'aria-label': 'Product name'})
     price = FloatField('Price', validators=[DataRequired(), NumberRange(min=0.01)], render_kw={'aria-label': 'Price'})
     description = TextAreaField('Description', render_kw={'aria-label': 'Description'})
     category = SelectField('Category', choices=[('puja', 'Puja Items'), ('saree', 'Sarees'), ('other', 'Other')], render_kw={'aria-label': 'Category'})
+    images = FileField('Product Images', render_kw={'multiple': True, 'accept': 'image/*', 'aria-label': 'Product images'})
     submit = SubmitField('Add Product')
 
-# Signup Form
+class EditProductForm(FlaskForm):
+    name = StringField('Product Name', validators=[DataRequired()], render_kw={'aria-label': 'Product name'})
+    price = FloatField('Price', validators=[DataRequired(), NumberRange(min=0.01)], render_kw={'aria-label': 'Price'})
+    description = TextAreaField('Description', render_kw={'aria-label': 'Description'})
+    category = SelectField('Category', choices=[('puja', 'Puja Items'), ('saree', 'Sarees'), ('other', 'Other')], render_kw={'aria-label': 'Category'})
+    images = FileField('Add New Images', render_kw={'multiple': True, 'accept': 'image/*', 'aria-label': 'Product images'})
+    submit = SubmitField('Update Product')
+
 class SignupForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()], render_kw={'aria-label': 'Email address'})
     password = PasswordField('Password', validators=[DataRequired(), Length(min=6)], render_kw={'aria-label': 'Password'})
@@ -90,13 +114,11 @@ class SignupForm(FlaskForm):
     mobile_number = StringField('Mobile Number', validators=[Length(min=7, max=12)], render_kw={'aria-label': 'Mobile number', 'pattern': '[0-9]{7,12}', 'title': 'Enter 7-12 digits'})
     submit = SubmitField('Sign Up')
 
-# Login Form
 class LoginForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()], render_kw={'aria-label': 'Email address'})
     password = PasswordField('Password', validators=[DataRequired()], render_kw={'aria-label': 'Password'})
     submit = SubmitField('Login')
 
-# Checkout Form
 class CheckoutForm(FlaskForm):
     shipping_address = TextAreaField('Shipping Address', validators=[DataRequired()], render_kw={'aria-label': 'Shipping address'})
     mobile_number = StringField('Mobile Number', validators=[DataRequired(), Length(min=7, max=12)], render_kw={'aria-label': 'Mobile number', 'pattern': '[0-9]{7,12}', 'title': 'Enter 7-12 digits'})
@@ -105,20 +127,17 @@ class CheckoutForm(FlaskForm):
     payment_method = SelectField('Payment Method', choices=[('cod', 'Cash on Delivery'), ('razorpay', 'Online Payment (Razorpay)')], validators=[DataRequired()], render_kw={'aria-label': 'Payment method'})
     submit = SubmitField('Place Order')
 
-# Profile Update Form
 class ProfileForm(FlaskForm):
     mobile_number = StringField('Mobile Number', validators=[Length(min=7, max=12)], render_kw={'aria-label': 'Mobile number', 'pattern': '[0-9]{7,12}', 'title': 'Enter 7-12 digits'})
     country_code = SelectField('Country Code', choices=[('+91', 'India (+91)'), ('+1', 'USA (+1)'), ('+44', 'UK (+44)'), ('+61', 'Australia (+61)')], default='+91', render_kw={'aria-label': 'Country code'})
     submit = SubmitField('Update Profile')
 
-# Discount Code Form
 class DiscountCodeForm(FlaskForm):
     code = StringField('Discount Code', validators=[DataRequired(), Length(min=3, max=20)], render_kw={'aria-label': 'Discount code'})
     percentage = FloatField('Discount Percentage', validators=[DataRequired(), NumberRange(min=0.01, max=100)], render_kw={'aria-label': 'Discount percentage'})
     expiry = DateField('Expiry Date', validators=[DataRequired()], format='%Y-%m-%d', render_kw={'aria-label': 'Expiry date'})
     submit = SubmitField('Add Discount Code')
 
-# Order Status Update Form
 class OrderStatusForm(FlaskForm):
     status = SelectField('Status', choices=[
         ('pending', 'Pending'),
@@ -129,69 +148,133 @@ class OrderStatusForm(FlaskForm):
     ], validators=[DataRequired()], render_kw={'aria-label': 'Order status'})
     submit = SubmitField('Update Status')
 
+# Flask-Login Setup
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 @login_manager.user_loader
 def load_user(user_id):
-    with app.app_context():
-        return db.session.get(User, int(user_id))
+    return db.session.get(User, int(user_id))
 
-# HTTPS Redirect (disabled in production since Render handles HTTPS)
+# HTTPS Redirect
 @app.before_request
 def require_https():
     if not app.debug and not request.is_secure and not os.getenv('RENDER'):
         return redirect(request.url.replace('http://', 'https://'))
+
+# Backblaze B2 Functions
+def upload_to_b2(file, filename, resize_dimensions):
+    try:
+        img = Image.open(file)
+        img.thumbnail(resize_dimensions, Image.Resampling.LANCZOS)
+        img = img.resize(resize_dimensions, Image.Resampling.LANCZOS)
+        img_byte_arr = BytesIO()
+        img.save(img_byte_arr, format=img.format or 'JPEG', quality=85)
+        img_byte_arr.seek(0)
+        bucket.upload_bytes(
+            data_bytes=img_byte_arr.getvalue(),
+            file_name=filename
+        )
+        app.logger.info(f"Successfully uploaded {filename} to Backblaze B2")
+        return filename
+    except Exception as e:
+        app.logger.error(f"Failed to upload to Backblaze B2: {e}")
+        raise
+
+def delete_from_b2(filename):
+    try:
+        file_info = bucket.get_file_info_by_name(filename)
+        file_id = file_info.id_
+        bucket.delete_file_version(file_id=file_id, file_name=filename)
+        app.logger.info(f"Deleted {filename} from Backblaze B2")
+    except Exception as e:
+        app.logger.error(f"Failed to delete {filename} from Backblaze B2: {e}")
+
+def get_authorized_url(filename, expiration_seconds=3600):
+    try:
+        signed_url = bucket.get_download_url_for_file_name(filename)
+        app.logger.info(f"Generated signed URL for {filename}: {signed_url}")
+        return signed_url
+    except Exception as e:
+        app.logger.error(f"Failed to generate signed URL for {filename}: {e}")
+        try:
+            file_info = bucket.get_file_info_by_name(filename)
+            base_url = f"https://f005.backblazeb2.com/file/mithlanchal-images/{urllib.parse.quote(filename)}"
+            auth_token = b2_api.account_info.get_account_auth_token()
+            signed_url = f"{base_url}?Authorization={auth_token}"
+            app.logger.info(f"Generated fallback signed URL for {filename}: {signed_url}")
+            return signed_url
+        except Exception as fallback_e:
+            app.logger.error(f"Fallback signed URL generation failed for {filename}: {fallback_e}")
+            return None
 
 # Function to initialize the database and admin user
 def init_db():
     with app.app_context():
         try:
             db.create_all()
-            # Reset products sequence
             max_id = db.session.query(db.func.max(Product.id)).scalar()
             if max_id is None:
                 next_id = 1
             else:
                 next_id = max_id + 1
-            db.session.execute(text("SELECT setval('products_id_seq', :next_id, false)"), {"next_id": next_id})
-            # Create admin user if it doesn't exist
+            db.session.execute(text("SELECT setval('mithlanchal_store.products_id_seq', :next_id, false)"), {"next_id": next_id})
             if not db.session.query(User).filter_by(email='admin@themithlanchal.com').first():
-                admin = User(email='admin@themithlanchal.com', 
-                             password=generate_password_hash('admin123'),
-                             is_admin=True, mobile_number='+919876543210')
+                admin = User(
+                    email='admin@themithlanchal.com',
+                    password=generate_password_hash('admin123'),
+                    is_admin=True,
+                    mobile_number='+919876543210'
+                )
                 db.session.add(admin)
             db.session.commit()
             app.logger.info("Database initialized successfully")
         except Exception as e:
-            app.logger.error(f"Failed to initialize database: {e}")
-            raise
+            app.logger.error(f"Failed to initialize database: {str(e)}")
+            raise Exception(f"Database initialization failed: {str(e)}")
 
-# Call the initialization function
 init_db()
 
+# Routes
 @app.route('/')
 def index():
-    with app.app_context():
-        query = request.args.get('query', '')
-        category = request.args.get('category', '')
-        min_price = request.args.get('min_price', type=float)
-        max_price = request.args.get('max_price', type=float)
-        products_query = Product.query
-        if query:
-            products_query = products_query.filter(Product.name.ilike(f'%{escape(query)}%') | Product.description.ilike(f'%{escape(query)}%'))
-        if category:
-            products_query = products_query.filter(Product.category == category)
-        if min_price is not None:
-            products_query = products_query.filter(Product.price >= min_price)
-        if max_price is not None:
-            products_query = products_query.filter(Product.price <= max_price)
-        products = products_query.all()
-        categories = db.session.query(Product.category).distinct().all()
-        categories = [c[0] for c in categories if c[0]]
+    query = request.args.get('query', '')
+    category = request.args.get('category', '')
+    min_price = request.args.get('min_price', type=float)
+    max_price = request.args.get('max_price', type=float)
+    products_query = Product.query
+    if query:
+        products_query = products_query.filter(Product.name.ilike(f'%{escape(query)}%') | Product.description.ilike(f'%{escape(query)}%'))
+    if category:
+        products_query = products_query.filter(Product.category == category)
+    if min_price is not None:
+        products_query = products_query.filter(Product.price >= min_price)
+    if max_price is not None:
+        products_query = products_query.filter(Product.price <= max_price)
+    products = products_query.all()
+    categories = db.session.query(Product.category).distinct().all()
+    categories = [c[0] for c in categories if c[0]]
+    product_image_urls = {}
+    for product in products:
+        image_urls = []
+        for image in product.images:
+            try:
+                if image.signed_url and image.expiration_timestamp and image.expiration_timestamp > datetime.utcnow():
+                    signed_url = image.signed_url
+                else:
+                    signed_url = get_authorized_url(image.image)
+                    if signed_url:
+                        image.signed_url = signed_url
+                        image.expiration_timestamp = datetime.utcnow() + timedelta(seconds=3600)
+                        db.session.commit()
+                image_urls.append(signed_url)
+                logging.debug(f"Generated signed URL for {image.image}: {signed_url}")
+            except Exception as e:
+                logging.error(f"Error generating signed URL for {image.image}: {str(e)}")
+        product_image_urls[product.id] = image_urls
     form = CartForm()
-    return render_template('index.html', products=products, categories=categories, form=form)
+    return render_template('index.html', products=products, categories=categories, form=form, product_image_urls=product_image_urls)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -200,18 +283,28 @@ def login():
         if form.validate_on_submit():
             email = escape(form.email.data)
             password = form.password.data
-            with app.app_context():
-                user = db.session.query(User).filter_by(email=email).first()
-                if user and check_password_hash(user.password, password):
-                    login_user(user)
-                    next_page = request.form.get('next') or request.args.get('next', url_for('index'))
-                    return redirect(next_page)
-                else:
-                    flash('Invalid email or password')
+            user = db.session.query(User).filter_by(email=email).first()
+            if user and check_password_hash(user.password, password):
+                login_user(user)
+                next_page = request.form.get('next') or request.args.get('next', url_for('index'))
+                return redirect(next_page)
+            else:
+                flash('Invalid email or password')
         else:
             flash('Form validation failed. Please check your input.')
             app.logger.debug(f"Login form errors: {form.errors}")
     return render_template('login.html', form=form)
+
+@app.route('/test-image')
+def test_image():
+    image = ProductImage.query.first()
+    if not image:
+        return "No images found in database"
+    try:
+        signed_url = get_authorized_url(image.image)
+        return f'<img src="{signed_url}" alt="Test Image" style="max-width: 200px;">'
+    except Exception as e:
+        return f"Error generating signed URL: {str(e)}"
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
@@ -223,24 +316,23 @@ def signup():
             country_code = form.country_code.data
             mobile_number = escape(form.mobile_number.data)
             full_mobile = f"{country_code}{mobile_number}" if mobile_number and country_code else None
-            with app.app_context():
-                if db.session.query(User).filter_by(email=email).first():
-                    flash('Email already registered')
-                elif full_mobile and not re.match(r'\+[0-9]{10,15}', full_mobile):
-                    flash('Invalid mobile number format')
-                elif full_mobile and db.session.query(User).filter_by(mobile_number=full_mobile).first():
-                    flash('Mobile number already registered')
-                else:
-                    user = User(
-                        email=email,
-                        password=generate_password_hash(password),
-                        is_admin=False,
-                        mobile_number=full_mobile
-                    )
-                    db.session.add(user)
-                    db.session.commit()
-                    login_user(user)
-                    return redirect(url_for('index'))
+            if db.session.query(User).filter_by(email=email).first():
+                flash('Email already registered')
+            elif full_mobile and not re.match(r'\+[0-9]{10,15}', full_mobile):
+                flash('Invalid mobile number format')
+            elif full_mobile and db.session.query(User).filter_by(mobile_number=full_mobile).first():
+                flash('Mobile number already registered')
+            else:
+                user = User(
+                    email=email,
+                    password=generate_password_hash(password),
+                    is_admin=False,
+                    mobile_number=full_mobile
+                )
+                db.session.add(user)
+                db.session.commit()
+                login_user(user)
+                return redirect(url_for('index'))
         else:
             flash('Form validation failed. Please check your input.')
             app.logger.debug(f"Signup form errors: {form.errors}")
@@ -259,31 +351,144 @@ def admin():
             price = form.price.data
             description = escape(form.description.data)
             category = form.category.data
-            image = request.files.get('image')
-            filename = None
-            if image and image.filename:
-                ext = os.path.splitext(secure_filename(image.filename))[1]
-                filename = f"{uuid.uuid4().hex}{ext}"
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                img = Image.open(image)
-                # Resize image to 300x300 pixels while maintaining aspect ratio
-                img.thumbnail((300, 300), Image.Resampling.LANCZOS)
-                # Ensure the image is exactly 300x300 by cropping if necessary
-                img = img.resize((300, 300), Image.Resampling.LANCZOS)
-                img.save(filepath, quality=85)
-                filename = os.path.join('uploads', filename)
-            with app.app_context():
-                product = Product(name=name, price=price, description=description, image=filename, category=category)
-                db.session.add(product)
-                db.session.commit()
-            flash('Product added successfully')
+            images = request.files.getlist('images')
+            product = Product(name=name, price=price, description=description, category=category)
+            db.session.add(product)
+            db.session.flush()
+            for idx, image in enumerate(images, 1):
+                if image and image.filename and image.content_type.startswith('image/'):
+                    ext = os.path.splitext(secure_filename(image.filename))[1]
+                    image_filename = f"products/{uuid.uuid4().hex}{ext}".lower()
+                    try:
+                        upload_to_b2(image, image_filename, (300, 300))
+                        signed_url = get_authorized_url(image_filename)
+                        product_image = ProductImage(
+                            product_id=product.id,
+                            image=image_filename,
+                            position=idx,
+                            signed_url=signed_url,
+                            expiration_timestamp=datetime.utcnow() + timedelta(seconds=3600)
+                        )
+                        db.session.add(product_image)
+                        app.logger.debug(f"Added ProductImage: product_id={product.id}, image={image_filename}, position={idx}, signed_url={signed_url}")
+                    except Exception as e:
+                        flash(f'Failed to upload image: {str(e)}', 'danger')
+                        db.session.rollback()
+                        app.logger.error(f"Image upload failed for {image_filename}: {e}")
+                        return redirect(url_for('admin'))
+            db.session.commit()
+            flash('Product added successfully', 'success')
             return redirect(url_for('admin'))
         else:
-            flash('Form validation failed. Please check your input.')
+            flash('Form validation failed. Please check your input.', 'danger')
             app.logger.debug(f"Add product form errors: {form.errors}")
-    with app.app_context():
-        products = db.session.query(Product).all()
-    return render_template('admin.html', products=products, form=form)
+    products = db.session.query(Product).all()
+    product_image_urls = {}
+    for product in products:
+        image_urls = []
+        for image in product.images:
+            try:
+                if image.signed_url and image.expiration_timestamp and image.expiration_timestamp > datetime.utcnow():
+                    signed_url = image.signed_url
+                else:
+                    signed_url = get_authorized_url(image.image)
+                    if signed_url:
+                        image.signed_url = signed_url
+                        image.expiration_timestamp = datetime.utcnow() + timedelta(seconds=3600)
+                        db.session.commit()
+                image_urls.append(signed_url)
+                logging.debug(f"Generated signed URL for {image.image}: {signed_url}")
+            except Exception as e:
+                logging.error(f"Error generating signed URL for {image.image}: {str(e)}")
+        product_image_urls[product.id] = image_urls
+    return render_template('admin.html', products=products, form=form, product_image_urls=product_image_urls)
+
+@app.route('/admin/edit/<int:product_id>', methods=['GET', 'POST'])
+@login_required
+def edit_product(product_id):
+    if not current_user.is_admin:
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('index'))
+    product = db.session.query(Product).get_or_404(product_id)
+    form = EditProductForm(obj=product)
+    if request.method == 'POST':
+        if form.validate_on_submit():
+            product.name = escape(form.name.data)
+            product.price = form.price.data
+            product.description = escape(form.description.data)
+            product.category = form.category.data
+            new_images = request.files.getlist('images')
+            if new_images:
+                max_position = max([img.position for img in product.images], default=0)
+                for idx, image in enumerate(new_images, max_position + 1):
+                    if image and image.filename and image.content_type.startswith('image/'):
+                        ext = os.path.splitext(secure_filename(image.filename))[1]
+                        image_filename = f"products/{uuid.uuid4().hex}{ext}".lower()
+                        try:
+                            upload_to_b2(image, image_filename, (300, 300))
+                            signed_url = get_authorized_url(image_filename)
+                            product_image = ProductImage(
+                                product_id=product.id,
+                                image=image_filename,
+                                position=idx,
+                                signed_url=signed_url,
+                                expiration_timestamp=datetime.utcnow() + timedelta(seconds=3600)
+                            )
+                            db.session.add(product_image)
+                        except Exception as e:
+                            flash(f'Failed to upload image: {str(e)}', 'danger')
+                            db.session.rollback()
+                            app.logger.error(f"Image upload failed for {image_filename}: {e}")
+                            return redirect(url_for('edit_product', product_id=product.id))
+            delete_images = request.form.getlist('delete_images')
+            for image_id in delete_images:
+                image = ProductImage.query.get(int(image_id))
+                if image and image.product_id == product.id:
+                    delete_from_b2(image.image)
+                    db.session.delete(image)
+            for idx, image in enumerate(product.images):
+                position = request.form.get(f'position_{image.id}')
+                if position:
+                    image.position = int(position)
+            db.session.commit()
+            flash('Product updated successfully', 'success')
+            return redirect(url_for('admin'))
+        else:
+            flash('Form validation failed. Please check your input.', 'danger')
+            app.logger.debug(f"Edit product form errors: {form.errors}")
+    image_urls = []
+    image_ids = []
+    for image in product.images:
+        try:
+            if image.signed_url and image.expiration_timestamp and image.expiration_timestamp > datetime.utcnow():
+                signed_url = image.signed_url
+            else:
+                signed_url = get_authorized_url(image.image)
+                if signed_url:
+                    image.signed_url = signed_url
+                    image.expiration_timestamp = datetime.utcnow() + timedelta(seconds=3600)
+                    db.session.commit()
+            image_urls.append(signed_url)
+            image_ids.append(image.id)
+            logging.debug(f"Generated signed URL for {image.image}: {signed_url}")
+        except Exception as e:
+            logging.error(f"Error generating signed URL for {image.image}: {str(e)}")
+    return render_template('edit_product.html', product=product, form=form, image_urls=image_urls, image_ids=image_ids)
+
+@app.route('/admin/delete/<int:product_id>')
+@login_required
+def delete_product(product_id):
+    if not current_user.is_admin:
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('index'))
+    product = db.session.query(Product).get_or_404(product_id)
+    db.session.query(CartItem).filter_by(product_id=product_id).delete()
+    for image in product.images:
+        delete_from_b2(image.image)
+    db.session.delete(product)
+    db.session.commit()
+    flash('Product deleted successfully', 'success')
+    return redirect(url_for('admin'))
 
 @app.route('/admin/discounts', methods=['GET', 'POST'])
 @login_required
@@ -296,24 +501,22 @@ def admin_discounts():
             code = escape(form.code.data).upper()
             percentage = form.percentage.data
             expiry = form.expiry.data
-            with app.app_context():
-                if db.session.query(DiscountCode).filter_by(code=code).first():
-                    flash('Discount code already exists', 'danger')
-                else:
-                    discount = DiscountCode(
-                        code=code,
-                        percentage=percentage,
-                        expiry=expiry
-                    )
-                    db.session.add(discount)
-                    db.session.commit()
-                    flash('Discount code added successfully', 'success')
+            if db.session.query(DiscountCode).filter_by(code=code).first():
+                flash('Discount code already exists', 'danger')
+            else:
+                discount = DiscountCode(
+                    code=code,
+                    percentage=percentage,
+                    expiry=expiry
+                )
+                db.session.add(discount)
+                db.session.commit()
+                flash('Discount code added successfully', 'success')
             return redirect(url_for('admin_discounts'))
         else:
             flash('Form validation failed. Please check your input.', 'danger')
             app.logger.debug(f"Discount code form errors: {form.errors}")
-    with app.app_context():
-        discounts = db.session.query(DiscountCode).all()
+    discounts = db.session.query(DiscountCode).all()
     return render_template('admin_discounts.html', discounts=discounts, form=form)
 
 @app.route('/admin/orders', methods=['GET', 'POST'])
@@ -326,20 +529,18 @@ def admin_orders():
         if form.validate_on_submit():
             order_id = request.form.get('order_id')
             new_status = form.status.data
-            with app.app_context():
-                order = db.session.query(Order).get_or_404(order_id)
-                old_status = order.status
-                order.status = new_status
-                db.session.commit()
-                # Send email notification to user
-                try:
-                    items_list = ''
-                    for item in order.order_items:
-                        items_list += f'- {item.product.name} (x{item.quantity}): ₹{item.price * item.quantity:.2f}\n'
-                    msg = Message(
-                        subject=f"The Mithlanchal - Order #{order.id} Status Updated",
-                        recipients=[order.email],
-                        body=f"""
+            order = db.session.query(Order).get_or_404(order_id)
+            old_status = order.status
+            order.status = new_status
+            db.session.commit()
+            try:
+                items_list = ''
+                for item in order.order_items:
+                    items_list += f'- {item.product.name} (x{item.quantity}): ₹{item.price * item.quantity:.2f}\n'
+                msg = Message(
+                    subject=f"The Mithlanchal - Order #{order.id} Status Updated",
+                    recipients=[order.email],
+                    body=f"""
 Dear Customer,
 
 Your order status has been updated!
@@ -361,64 +562,70 @@ Thank you for shopping with The Mithlanchal!
 Best,
 The Mithlanchal Team
 """
-                    )
-                    mail.send(msg)
-                    flash(f'Order #{order.id} status updated to {new_status.title()} and user notified.', 'success')
-                except Exception as e:
-                    app.logger.error(f"Email notification failed: {e}")
-                    flash(f'Order #{order.id} status updated to {new_status.title()}, but email notification failed.', 'warning')
+                )
+                mail.send(msg)
+                flash(f'Order #{order.id} status updated to {new_status.title()} and user notified.', 'success')
+            except Exception as e:
+                app.logger.error(f"Email notification failed: {e}")
+                flash(f'Order #{order.id} status updated to {new_status.title()}, but email notification failed.', 'warning')
             return redirect(url_for('admin_orders'))
         else:
             flash('Form validation failed. Please check your input.', 'danger')
-    with app.app_context():
-        orders = db.session.query(Order).order_by(Order.id.desc()).all()
+    orders = db.session.query(Order).order_by(Order.id.desc()).all()
     return render_template('admin_orders.html', orders=orders, form=form)
 
-@app.route('/product/<int:id>')
-def product(id):
-    with app.app_context():
-        product = db.session.query(Product).get_or_404(id)
-    session.modified = True
-    form = CartForm(product_id=id)
-    return render_template('product.html', product=product, form=form)
+@app.route('/product/<int:product_id>')
+def product(product_id):
+    product = Product.query.get_or_404(product_id)
+    images = ProductImage.query.filter_by(product_id=product_id).all()
+    image_urls = []
+    for image in images:
+        try:
+            if image.signed_url and image.expiration_timestamp and image.expiration_timestamp > datetime.utcnow():
+                signed_url = image.signed_url
+            else:
+                signed_url = get_authorized_url(image.image)
+                if signed_url:
+                    image.signed_url = signed_url
+                    image.expiration_timestamp = datetime.utcnow() + timedelta(seconds=3600)
+                    db.session.commit()
+            image_urls.append(signed_url)
+            logging.debug(f"Generated signed URL for {image.image}: {signed_url}")
+        except Exception as e:
+            logging.error(f"Error generating signed URL for {image.image}: {str(e)}")
+    form = CartForm(product_id=product_id)
+    return render_template('product.html', product=product, image_urls=image_urls, form=form)
 
 @app.route('/cart', methods=['GET', 'POST'])
 @login_required
 def cart():
     form = CartUpdateForm()
     if request.method == 'POST':
-        # Handle "Add to Cart" form submission (from product.html)
         add_to_cart_form = CartForm(request.form)
-        app.logger.debug(f"Add to cart form data: {request.form}")
-        app.logger.debug(f"Session data: {session}")
         if add_to_cart_form.validate_on_submit():
             product_id = add_to_cart_form.product_id.data
             quantity = add_to_cart_form.quantity.data
-            with app.app_context():
-                cart_item = db.session.query(CartItem).filter_by(user_id=current_user.id, product_id=product_id).first()
-                if cart_item:
-                    cart_item.quantity += quantity
-                else:
-                    cart_item = CartItem(user_id=current_user.id, product_id=product_id, quantity=quantity)
-                    db.session.add(cart_item)
-                db.session.commit()
+            cart_item = db.session.query(CartItem).filter_by(user_id=current_user.id, product_id=product_id).first()
+            if cart_item:
+                cart_item.quantity += quantity
+            else:
+                cart_item = CartItem(user_id=current_user.id, product_id=product_id, quantity=quantity)
+                db.session.add(cart_item)
+            db.session.commit()
             flash('Item added to cart successfully', 'success')
             return redirect(url_for('cart'))
-        # Handle "Update Cart" form submission (from cart.html)
         if form.validate_on_submit():
             product_id = form.product_id.data
             quantity = form.quantity.data
-            with app.app_context():
-                cart_item = db.session.query(CartItem).filter_by(user_id=current_user.id, product_id=product_id).first()
-                if cart_item:
-                    cart_item.quantity = quantity
-                else:
-                    cart_item = CartItem(user_id=current_user.id, product_id=product_id, quantity=quantity)
-                    db.session.add(cart_item)
-                db.session.commit()
+            cart_item = db.session.query(CartItem).filter_by(user_id=current_user.id, product_id=product_id).first()
+            if cart_item:
+                cart_item.quantity = quantity
+            else:
+                cart_item = CartItem(user_id=current_user.id, product_id=product_id, quantity=quantity)
+                db.session.add(cart_item)
+            db.session.commit()
             flash('Cart updated successfully', 'success')
             return redirect(url_for('cart'))
-        # If validation fails, flash the appropriate error
         if add_to_cart_form.errors:
             error_message = 'Add to cart failed. Please check your input.'
             if 'csrf_token' in add_to_cart_form.errors:
@@ -429,34 +636,49 @@ def cart():
             flash('Cart update failed. Please check your input.', 'danger')
             app.logger.debug(f"Update cart form errors: {form.errors}")
         return redirect(url_for('cart'))
-    with app.app_context():
-        cart_items = db.session.query(CartItem).filter_by(user_id=current_user.id).all()
-        total = round(sum(item.product.price * item.quantity for item in cart_items), 2)
-    return render_template('cart.html', cart_items=cart_items, total=total, form=form)
+    cart_items = db.session.query(CartItem).filter_by(user_id=current_user.id).all()
+    cart_image_urls = {}
+    for item in cart_items:
+        image_urls = []
+        for image in item.product.images:
+            try:
+                if image.signed_url and image.expiration_timestamp and image.expiration_timestamp > datetime.utcnow():
+                    signed_url = image.signed_url
+                else:
+                    signed_url = get_authorized_url(image.image)
+                    if signed_url:
+                        image.signed_url = signed_url
+                        image.expiration_timestamp = datetime.utcnow() + timedelta(seconds=3600)
+                        db.session.commit()
+                image_urls.append(signed_url)
+                logging.debug(f"Generated signed URL for {image.image}: {signed_url}")
+            except Exception as e:
+                logging.error(f"Error generating signed URL for {image.image}: {str(e)}")
+        cart_image_urls[item.product.id] = image_urls
+    total = round(sum(item.product.price * item.quantity for item in cart_items), 2)
+    return render_template('cart.html', cart_items=cart_items, total=total, form=form, cart_image_urls=cart_image_urls)
 
 @app.route('/cart/remove/<int:cart_item_id>', methods=['POST'])
 @login_required
 def remove_from_cart(cart_item_id):
-    with app.app_context():
-        cart_item = db.session.query(CartItem).get_or_404(cart_item_id)
-        if cart_item.user_id != current_user.id:
-            flash('Unauthorized action')
-            return redirect(url_for('cart'))
-        db.session.delete(cart_item)
-        db.session.commit()
+    cart_item = db.session.query(CartItem).get_or_404(cart_item_id)
+    if cart_item.user_id != current_user.id:
+        flash('Unauthorized action')
+        return redirect(url_for('cart'))
+    db.session.delete(cart_item)
+    db.session.commit()
     flash('Item removed from cart')
     return redirect(url_for('cart'))
 
 @app.route('/cart/increase/<int:cart_item_id>', methods=['POST'])
 @login_required
 def increase_cart_item(cart_item_id):
-    with app.app_context():
-        cart_item = db.session.query(CartItem).get_or_404(cart_item_id)
-        if cart_item.user_id != current_user.id:
-            return jsonify({'error': 'Unauthorized action'}), 403
-        cart_item.quantity += 1
-        db.session.commit()
-        total = round(sum(item.product.price * item.quantity for item in db.session.query(CartItem).filter_by(user_id=current_user.id).all()), 2)
+    cart_item = db.session.query(CartItem).get_or_404(cart_item_id)
+    if cart_item.user_id != current_user.id:
+        return jsonify({'error': 'Unauthorized action'}), 403
+    cart_item.quantity += 1
+    db.session.commit()
+    total = round(sum(item.product.price * item.quantity for item in db.session.query(CartItem).filter_by(user_id=current_user.id).all()), 2)
     return jsonify({
         'success': True,
         'message': 'Quantity increased',
@@ -468,111 +690,109 @@ def increase_cart_item(cart_item_id):
 @app.route('/cart/decrease/<int:cart_item_id>', methods=['POST'])
 @login_required
 def decrease_cart_item(cart_item_id):
-    with app.app_context():
-        cart_item = db.session.query(CartItem).get_or_404(cart_item_id)
-        if cart_item.user_id != current_user.id:
-            return jsonify({'error': 'Unauthorized action'}), 403
-        if cart_item.quantity > 1:
-            cart_item.quantity -= 1
-            db.session.commit()
-            total = round(sum(item.product.price * item.quantity for item in db.session.query(CartItem).filter_by(user_id=current_user.id).all()), 2)
-            return jsonify({
-                'success': True,
-                'message': 'Quantity decreased',
-                'quantity': cart_item.quantity,
-                'item_total': round(cart_item.product.price * cart_item.quantity, 2),
-                'cart_total': total
-            })
-        else:
-            db.session.delete(cart_item)
-            db.session.commit()
-            total = round(sum(item.product.price * item.quantity for item in db.session.query(CartItem).filter_by(user_id=current_user.id).all()), 2)
-            return jsonify({
-                'success': True,
-                'message': 'Item removed from cart',
-                'quantity': 0,
-                'item_total': 0,
-                'cart_total': total
-            })
+    cart_item = db.session.query(CartItem).get_or_404(cart_item_id)
+    if cart_item.user_id != current_user.id:
+        return jsonify({'error': 'Unauthorized action'}), 403
+    if cart_item.quantity > 1:
+        cart_item.quantity -= 1
+        db.session.commit()
+        total = round(sum(item.product.price * item.quantity for item in db.session.query(CartItem).filter_by(user_id=current_user.id).all()), 2)
+        return jsonify({
+            'success': True,
+            'message': 'Quantity decreased',
+            'quantity': cart_item.quantity,
+            'item_total': round(cart_item.product.price * cart_item.quantity, 2),
+            'cart_total': total
+        })
+    else:
+        db.session.delete(cart_item)
+        db.session.commit()
+        total = round(sum(item.product.price * item.quantity for item in db.session.query(CartItem).filter_by(user_id=current_user.id).all()), 2)
+        return jsonify({
+            'success': True,
+            'message': 'Item removed from cart',
+            'quantity': 0,
+            'item_total': 0,
+            'cart_total': total
+        })
 
 @app.route('/checkout', methods=['GET', 'POST'])
 @login_required
 def checkout():
     form = CheckoutForm()
-    with app.app_context():
-        cart_items = db.session.query(CartItem).filter_by(user_id=current_user.id).all()
-        if not cart_items:
-            flash('Your cart is empty')
-            return redirect(url_for('cart'))
-        total = round(sum(item.product.price * item.quantity for item in cart_items), 2)
-        discount = 0.0
-        discount_code = None
-        if request.method == 'POST':
-            if form.validate_on_submit():
-                shipping_address = escape(form.shipping_address.data)
-                mobile_number = escape(form.mobile_number.data)
-                email = escape(form.email.data)
-                payment_method = form.payment_method.data
-                discount_code_str = escape(form.discount_code.data).upper()
-                if discount_code_str:
-                    discount_code = db.session.query(DiscountCode).filter_by(
-                        code=discount_code_str, active=True
-                    ).filter(DiscountCode.expiry >= datetime.utcnow()).first()
-                    if discount_code:
-                        discount = round(total * (discount_code.percentage / 100), 2)
-                        total = round(total - discount, 2)
-                    else:
-                        flash('Invalid or expired discount code')
-                        return render_template('checkout.html', cart_items=cart_items, total=total, discount=discount, form=form, user_email=current_user.email)
-                order = Order(
-                    user_id=current_user.id,
-                    total=total,
-                    payment_method=payment_method,
-                    status='pending',
-                    shipping_address=shipping_address,
-                    mobile_number=mobile_number,
-                    email=email,
-                    discount_code_id=discount_code.id if discount_code else None,
-                    discount_applied=discount
+    cart_items = db.session.query(CartItem).filter_by(user_id=current_user.id).all()
+    if not cart_items:
+        flash('Your cart is empty')
+        return redirect(url_for('cart'))
+    total = round(sum(item.product.price * item.quantity for item in cart_items), 2)
+    discount = 0.0
+    discount_code = None
+    if request.method == 'POST':
+        if form.validate_on_submit():
+            shipping_address = escape(form.shipping_address.data)
+            mobile_number = escape(form.mobile_number.data)
+            email = escape(form.email.data)
+            payment_method = form.payment_method.data
+            discount_code_str = escape(form.discount_code.data).upper()
+            if discount_code_str:
+                discount_code = db.session.query(DiscountCode).filter_by(
+                    code=discount_code_str, active=True
+                ).filter(DiscountCode.expiry >= datetime.utcnow()).first()
+                if discount_code:
+                    discount = round(total * (discount_code.percentage / 100), 2)
+                    total = round(total - discount, 2)
+                else:
+                    flash('Invalid or expired discount code')
+                    return render_template('checkout.html', cart_items=cart_items, total=total, discount=discount, form=form, user_email=current_user.email)
+            order = Order(
+                user_id=current_user.id,
+                total=total,
+                payment_method=payment_method,
+                status='pending',
+                shipping_address=shipping_address,
+                mobile_number=mobile_number,
+                email=email,
+                discount_code_id=discount_code.id if discount_code else None,
+                discount_applied=discount
+            )
+            db.session.add(order)
+            for item in cart_items:
+                order_item = OrderItem(
+                    order=order,
+                    product_id=item.product_id,
+                    quantity=item.quantity,
+                    price=item.product.price
                 )
-                db.session.add(order)
-                for item in cart_items:
-                    order_item = OrderItem(
-                        order=order,
-                        product_id=item.product_id,
-                        quantity=item.quantity,
-                        price=item.product.price
-                    )
-                    db.session.add(order_item)
-                db.session.commit()
-                if payment_method == 'razorpay':
-                    order_data = {
-                        'amount': int(total * 100),
-                        'currency': 'INR',
-                        'receipt': f'order_{order.id}',
-                        'payment_capture': 1
-                    }
-                    try:
-                        razorpay_order = razorpay_client.order.create(data=order_data)
-                        return render_template('checkout.html', order=razorpay_order, cart_items=cart_items, total=total,
-                                             razorpay_key=os.getenv('RAZORPAY_KEY'), db_order_id=order.id, discount=discount,
-                                             form=form, user_email=current_user.email)
-                    except Exception as e:
-                        flash(f'Error creating Razorpay order: {str(e)}')
-                        db.session.delete(order)
-                        db.session.commit()
-                        return redirect(url_for('cart'))
-                elif payment_method == 'cod':
-                    db.session.query(CartItem).filter_by(user_id=current_user.id).delete()
+                db.session.add(order_item)
+            db.session.commit()
+            if payment_method == 'razorpay':
+                order_data = {
+                    'amount': int(total * 100),
+                    'currency': 'INR',
+                    'receipt': f'order_{order.id}',
+                    'payment_capture': 1
+                }
+                try:
+                    razorpay_order = razorpay_client.order.create(data=order_data)
+                    return render_template('checkout.html', order=razorpay_order, cart_items=cart_items, total=total,
+                                         razorpay_key=os.getenv('RAZORPAY_KEY'), db_order_id=order.id, discount=discount,
+                                         form=form, user_email=current_user.email)
+                except Exception as e:
+                    flash(f'Error creating Razorpay order: {str(e)}')
+                    db.session.delete(order)
                     db.session.commit()
-                    try:
-                        items_list = ''
-                        for item in order.order_items:
-                            items_list += f'- {item.product.name} (x{item.quantity}): ₹{item.price * item.quantity:.2f}\n'
-                        msg = Message(
-                            subject=f"The Mithlanchal - Order #{order.id} Confirmed",
-                            recipients=[order.email],
-                            body=f"""
+                    return redirect(url_for('cart'))
+            elif payment_method == 'cod':
+                db.session.query(CartItem).filter_by(user_id=current_user.id).delete()
+                db.session.commit()
+                try:
+                    items_list = ''
+                    for item in order.order_items:
+                        items_list += f'- {item.product.name} (x{item.quantity}): ₹{item.price * item.quantity:.2f}\n'
+                    msg = Message(
+                        subject=f"The Mithlanchal - Order #{order.id} Confirmed",
+                        recipients=[order.email],
+                        body=f"""
 Dear Customer,
 
 Thank you for your order at The Mithlanchal!
@@ -580,7 +800,7 @@ Thank you for your order at The Mithlanchal!
 Order #{order.id}
 Date: {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}
 Total: ₹{order.total:.2f}
-{f'Discount: ₹{discount:.2f}' if discount > 0 else ''}
+{f'Discount: ₹{order.discount_applied:.2f}' if order.discount_applied > 0 else ''}
 Payment: Cash on Delivery
 Shipping: {order.shipping_address}
 Mobile: {order.mobile_number}
@@ -593,15 +813,15 @@ We'll notify you when it ships!
 Best,
 The Mithlanchal Team
 """
-                        )
-                        mail.send(msg)
-                    except Exception as e:
-                        app.logger.error(f"Email failed: {e}")
-                    flash('Order placed successfully with Cash on Delivery!')
-                    return redirect(url_for('order_confirmation', order_id=order.id))
-            else:
-                flash('Please fill in all required fields')
-                app.logger.debug(f"Checkout form errors: {form.errors}")
+                    )
+                    mail.send(msg)
+                except Exception as e:
+                    app.logger.error(f"Email failed: {e}")
+                flash('Order placed successfully with Cash on Delivery!')
+                return redirect(url_for('order_confirmation', order_id=order.id))
+        else:
+            flash('Please fill in all required fields')
+            app.logger.debug(f"Checkout form errors: {form.errors}")
     return render_template('checkout.html', cart_items=cart_items, total=total, discount=discount, form=form, user_email=current_user.email)
 
 @app.route('/payment/success', methods=['POST'])
@@ -616,22 +836,21 @@ def payment_success():
         'razorpay_payment_id': payment_id,
         'razorpay_signature': signature
     }
-    with app.app_context():
+    try:
+        razorpay_client.utility.verify_payment_signature(params_dict)
+        order = db.session.query(Order).get_or_404(db_order_id)
+        order.payment_id = payment_id
+        order.status = 'confirmed'
+        db.session.query(CartItem).filter_by(user_id=current_user.id).delete()
+        db.session.commit()
         try:
-            razorpay_client.utility.verify_payment_signature(params_dict)
-            order = db.session.query(Order).get_or_404(db_order_id)
-            order.payment_id = payment_id
-            order.status = 'confirmed'
-            db.session.query(CartItem).filter_by(user_id=current_user.id).delete()
-            db.session.commit()
-            try:
-                items_list = ''
-                for item in order.order_items:
-                    items_list += f'- {item.product.name} (x{item.quantity}): ₹{item.price * item.quantity:.2f}\n'
-                msg = Message(
-                    subject=f"The Mithlanchal - Order #{order.id} Confirmed",
-                    recipients=[order.email],
-                    body=f"""
+            items_list = ''
+            for item in order.order_items:
+                items_list += f'- {item.product.name} (x{item.quantity}): ₹{item.price * item.quantity:.2f}\n'
+            msg = Message(
+                subject=f"The Mithlanchal - Order #{order.id} Confirmed",
+                recipients=[order.email],
+                body=f"""
 Dear Customer,
 
 Thank you for your order at The Mithlanchal!
@@ -652,21 +871,20 @@ We'll notify you when it ships!
 Best,
 The Mithlanchal Team
 """
-                )
-                mail.send(msg)
-            except Exception as e:
-                app.logger.error(f"Email failed: {e}")
-            flash('Payment successful! Your order is confirmed.')
-            return redirect(url_for('order_confirmation', order_id=order.id))
+            )
+            mail.send(msg)
         except Exception as e:
-            flash(f'Payment verification failed: {str(e)}')
-            return redirect(url_for('checkout'))
+            app.logger.error(f"Email failed: {e}")
+        flash('Payment successful! Your order is confirmed.')
+        return redirect(url_for('order_confirmation', order_id=order.id))
+    except Exception as e:
+        flash(f'Payment verification failed: {str(e)}')
+        return redirect(url_for('checkout'))
 
 @app.route('/orders')
 @login_required
 def orders():
-    with app.app_context():
-        user_orders = db.session.query(Order).filter_by(user_id=current_user.id).order_by(Order.id.desc()).all()
+    user_orders = db.session.query(Order).filter_by(user_id=current_user.id).order_by(Order.id.desc()).all()
     return render_template('orders.html', orders=user_orders)
 
 @app.route('/account', methods=['GET', 'POST'])
@@ -678,16 +896,15 @@ def account():
             country_code = form.country_code.data
             mobile_number = escape(form.mobile_number.data)
             full_mobile = f"{country_code}{mobile_number}" if mobile_number and country_code else None
-            with app.app_context():
-                if full_mobile and not re.match(r'\+[0-9]{10,15}', full_mobile):
-                    flash('Invalid mobile number format', 'danger')
-                elif full_mobile and db.session.query(User).filter(User.id != current_user.id, User.mobile_number == full_mobile).first():
-                    flash('Mobile number already registered by another user', 'danger')
-                else:
-                    current_user.mobile_number = full_mobile
-                    db.session.commit()
-                    flash('Profile updated successfully', 'success')
-                    return redirect(url_for('account'))
+            if full_mobile and not re.match(r'\+[0-9]{10,15}', full_mobile):
+                flash('Invalid mobile number format', 'danger')
+            elif full_mobile and db.session.query(User).filter(User.id != current_user.id, User.mobile_number == full_mobile).first():
+                flash('Mobile number already registered by another user', 'danger')
+            else:
+                current_user.mobile_number = full_mobile
+                db.session.commit()
+                flash('Profile updated successfully', 'success')
+                return redirect(url_for('account'))
         else:
             flash('Form validation failed. Please check your input.', 'danger')
             app.logger.debug(f"Profile form errors: {form.errors}")
@@ -696,25 +913,23 @@ def account():
 @app.route('/order/<int:order_id>')
 @login_required
 def order_confirmation(order_id):
-    with app.app_context():
-        order = db.session.query(Order).options(
-            joinedload(Order.order_items).joinedload(OrderItem.product)
-        ).get_or_404(order_id)
-        if order.user_id != current_user.id:
-            flash('Unauthorized access')
-            return redirect(url_for('index'))
+    order = db.session.query(Order).options(
+        joinedload(Order.order_items).joinedload(OrderItem.product)
+    ).get_or_404(order_id)
+    if order.user_id != current_user.id:
+        flash('Unauthorized access')
+        return redirect(url_for('index'))
     return render_template('order_confirmation.html', order=order)
 
 @app.route('/invoice/<int:order_id>')
 @login_required
 def generate_invoice(order_id):
-    with app.app_context():
-        order = db.session.query(Order).options(
-            joinedload(Order.order_items).joinedload(OrderItem.product)
-        ).get_or_404(order_id)
-        if order.user_id != current_user.id:
-            flash('Unauthorized access')
-            return redirect(url_for('index'))
+    order = db.session.query(Order).options(
+        joinedload(Order.order_items).joinedload(OrderItem.product)
+    ).get_or_404(order_id)
+    if order.user_id != current_user.id:
+        flash('Unauthorized access')
+        return redirect(url_for('index'))
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     elements = []
@@ -767,31 +982,23 @@ def generate_invoice(order_id):
 @app.route('/cancel_order/<int:order_id>', methods=['GET'])
 @login_required
 def cancel_order(order_id):
-    with app.app_context():
-        order = db.session.query(Order).get_or_404(order_id)
-        # Check if the order belongs to the current user
-        if order.user_id != current_user.id:
-            flash('You are not authorized to cancel this order.', 'danger')
-            return redirect(url_for('orders'))
-        
-        # Check if the order can be cancelled (only pending or processing orders)
-        if order.status not in ['pending', 'processing']:
-            flash('This order cannot be cancelled as it is already ' + order.status + '.', 'danger')
-            return redirect(url_for('order_confirmation', order_id=order.id))
-        
-        # Update the order status to cancelled
-        order.status = 'cancelled'
-        db.session.commit()
-        
-        # Send email notification to user
-        try:
-            items_list = ''
-            for item in order.order_items:
-                items_list += f'- {item.product.name} (x{item.quantity}): ₹{item.price * item.quantity:.2f}\n'
-            msg = Message(
-                subject=f"The Mithlanchal - Order #{order.id} Cancelled",
-                recipients=[order.email],
-                body=f"""
+    order = db.session.query(Order).get_or_404(order_id)
+    if order.user_id != current_user.id:
+        flash('You are not authorized to cancel this order.', 'danger')
+        return redirect(url_for('orders'))
+    if order.status not in ['pending', 'processing']:
+        flash('This order cannot be cancelled as it is already ' + order.status + '.', 'danger')
+        return redirect(url_for('order_confirmation', order_id=order.id))
+    order.status = 'cancelled'
+    db.session.commit()
+    try:
+        items_list = ''
+        for item in order.order_items:
+            items_list += f'- {item.product.name} (x{item.quantity}): ₹{item.price * item.quantity:.2f}\n'
+        msg = Message(
+            subject=f"The Mithlanchal - Order #{order.id} Cancelled",
+            recipients=[order.email],
+            body=f"""
 Dear Customer,
 
 Your order has been cancelled as per your request.
@@ -812,13 +1019,12 @@ If you have any questions, please contact us.
 Best,
 The Mithlanchal Team
 """
-            )
-            mail.send(msg)
-            flash('Order has been cancelled successfully, and a confirmation email has been sent.', 'success')
-        except Exception as e:
-            app.logger.error(f"Email notification failed: {e}")
-            flash('Order has been cancelled successfully, but email notification failed.', 'warning')
-    
+        )
+        mail.send(msg)
+        flash('Order has been cancelled successfully, and a confirmation email has been sent.', 'success')
+    except Exception as e:
+        app.logger.error(f"Email notification failed: {e}")
+        flash('Order has been cancelled successfully, but email notification failed.', 'warning')
     return redirect(url_for('order_confirmation', order_id=order.id))
 
 @app.route('/privacy')
