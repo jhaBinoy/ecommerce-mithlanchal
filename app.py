@@ -1,7 +1,7 @@
 import os
 import uuid
 import re
-from flask import Flask, render_template, request, redirect, url_for, flash, Response, jsonify, session
+from flask import Flask, render_template, request, redirect, url_for, flash, Response, jsonify
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from flask_mail import Mail, Message
 from flask_wtf import FlaskForm
@@ -47,6 +47,14 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 logging.basicConfig(level=logging.DEBUG)
 app.logger.setLevel(logging.DEBUG)
 
+# Initialize database
+db.init_app(app)
+migrate = Migrate(app, db)
+
+# Initialize extensions
+mail = Mail(app)
+csrf = CSRFProtect(app)
+
 # Backblaze B2 Configuration
 load_dotenv()
 B2_KEY_ID = os.getenv('B2_KEY_ID')
@@ -67,24 +75,14 @@ def get_bucket():
 
 bucket = get_bucket()
 
-# Initialize database
-db.init_app(app)
-migrate = Migrate(app, db)
-
-# Initialize extensions
-mail = Mail(app)
-csrf = CSRFProtect(app)
-
 razorpay_client = razorpay.Client(auth=(os.getenv('RAZORPAY_KEY', ''), os.getenv('RAZORPAY_SECRET', '')))
 
 # Import models
 from models import User, Product, ProductImage, DiscountCode, CartItem, Order, OrderItem
 
 # Forms
-class CartUpdateForm(FlaskForm):
-    product_id = IntegerField('Product ID', validators=[DataRequired()], render_kw={'type': 'hidden'})
-    quantity = IntegerField('Quantity', validators=[DataRequired(), NumberRange(min=1)], render_kw={'aria-label': 'Quantity'})
-    submit = SubmitField('Update Cart')
+class CSRFOnlyForm(FlaskForm):
+    pass
 
 class CartForm(FlaskForm):
     product_id = IntegerField('Product ID', validators=[DataRequired()], render_kw={'type': 'hidden'})
@@ -234,6 +232,7 @@ def init_db():
             app.logger.error(f"Failed to initialize database: {str(e)}")
             raise Exception(f"Database initialization failed: {str(e)}")
 
+# Initialize database after app setup
 init_db()
 
 # Routes
@@ -599,12 +598,12 @@ def product(product_id):
 @app.route('/cart', methods=['GET', 'POST'])
 @login_required
 def cart():
-    form = CartUpdateForm()
+    csrf_form = CSRFOnlyForm()
     if request.method == 'POST':
-        add_to_cart_form = CartForm(request.form)
-        if add_to_cart_form.validate_on_submit():
-            product_id = add_to_cart_form.product_id.data
-            quantity = add_to_cart_form.quantity.data
+        form = CartForm(request.form)
+        if form.validate_on_submit():
+            product_id = form.product_id.data
+            quantity = form.quantity.data
             cart_item = db.session.query(CartItem).filter_by(user_id=current_user.id, product_id=product_id).first()
             if cart_item:
                 cart_item.quantity += quantity
@@ -612,30 +611,12 @@ def cart():
                 cart_item = CartItem(user_id=current_user.id, product_id=product_id, quantity=quantity)
                 db.session.add(cart_item)
             db.session.commit()
-            flash('Item added to cart successfully', 'success')
+            flash('Item added to cart', 'success')
             return redirect(url_for('cart'))
-        if form.validate_on_submit():
-            product_id = form.product_id.data
-            quantity = form.quantity.data
-            cart_item = db.session.query(CartItem).filter_by(user_id=current_user.id, product_id=product_id).first()
-            if cart_item:
-                cart_item.quantity = quantity
-            else:
-                cart_item = CartItem(user_id=current_user.id, product_id=product_id, quantity=quantity)
-                db.session.add(cart_item)
-            db.session.commit()
-            flash('Cart updated successfully', 'success')
+        else:
+            flash('Failed to add item to cart. Please try again.', 'danger')
+            app.logger.debug(f"Add to cart form errors: {form.errors}")
             return redirect(url_for('cart'))
-        if add_to_cart_form.errors:
-            error_message = 'Add to cart failed. Please check your input.'
-            if 'csrf_token' in add_to_cart_form.errors:
-                error_message = 'Session expired or invalid. Please refresh the page and try again.'
-            flash(error_message, 'danger')
-            app.logger.debug(f"Add to cart form errors: {add_to_cart_form.errors}")
-        elif form.errors:
-            flash('Cart update failed. Please check your input.', 'danger')
-            app.logger.debug(f"Update cart form errors: {form.errors}")
-        return redirect(url_for('cart'))
     cart_items = db.session.query(CartItem).filter_by(user_id=current_user.id).all()
     cart_image_urls = {}
     for item in cart_items:
@@ -656,18 +637,18 @@ def cart():
                 logging.error(f"Error generating signed URL for {image.image}: {str(e)}")
         cart_image_urls[item.product.id] = image_urls
     total = round(sum(item.product.price * item.quantity for item in cart_items), 2)
-    return render_template('cart.html', cart_items=cart_items, total=total, form=form, cart_image_urls=cart_image_urls)
+    return render_template('cart.html', cart_items=cart_items, total=total, cart_image_urls=cart_image_urls, form=csrf_form)
 
 @app.route('/cart/remove/<int:cart_item_id>', methods=['POST'])
 @login_required
 def remove_from_cart(cart_item_id):
     cart_item = db.session.query(CartItem).get_or_404(cart_item_id)
     if cart_item.user_id != current_user.id:
-        flash('Unauthorized action')
+        flash('Unauthorized action', 'danger')
         return redirect(url_for('cart'))
     db.session.delete(cart_item)
     db.session.commit()
-    flash('Item removed from cart')
+    flash('Item removed from cart', 'success')
     return redirect(url_for('cart'))
 
 @app.route('/cart/increase/<int:cart_item_id>', methods=['POST'])
@@ -675,46 +656,29 @@ def remove_from_cart(cart_item_id):
 def increase_cart_item(cart_item_id):
     cart_item = db.session.query(CartItem).get_or_404(cart_item_id)
     if cart_item.user_id != current_user.id:
-        return jsonify({'error': 'Unauthorized action'}), 403
+        flash('Unauthorized action', 'danger')
+        return redirect(url_for('cart'))
     cart_item.quantity += 1
     db.session.commit()
-    total = round(sum(item.product.price * item.quantity for item in db.session.query(CartItem).filter_by(user_id=current_user.id).all()), 2)
-    return jsonify({
-        'success': True,
-        'message': 'Quantity increased',
-        'quantity': cart_item.quantity,
-        'item_total': round(cart_item.product.price * cart_item.quantity, 2),
-        'cart_total': total
-    })
+    flash('Quantity increased', 'success')
+    return redirect(url_for('cart'))
 
 @app.route('/cart/decrease/<int:cart_item_id>', methods=['POST'])
 @login_required
 def decrease_cart_item(cart_item_id):
     cart_item = db.session.query(CartItem).get_or_404(cart_item_id)
     if cart_item.user_id != current_user.id:
-        return jsonify({'error': 'Unauthorized action'}), 403
+        flash('Unauthorized action', 'danger')
+        return redirect(url_for('cart'))
     if cart_item.quantity > 1:
         cart_item.quantity -= 1
         db.session.commit()
-        total = round(sum(item.product.price * item.quantity for item in db.session.query(CartItem).filter_by(user_id=current_user.id).all()), 2)
-        return jsonify({
-            'success': True,
-            'message': 'Quantity decreased',
-            'quantity': cart_item.quantity,
-            'item_total': round(cart_item.product.price * cart_item.quantity, 2),
-            'cart_total': total
-        })
+        flash('Quantity decreased', 'success')
     else:
         db.session.delete(cart_item)
         db.session.commit()
-        total = round(sum(item.product.price * item.quantity for item in db.session.query(CartItem).filter_by(user_id=current_user.id).all()), 2)
-        return jsonify({
-            'success': True,
-            'message': 'Item removed from cart',
-            'quantity': 0,
-            'item_total': 0,
-            'cart_total': total
-        })
+        flash('Item removed from cart', 'success')
+    return redirect(url_for('cart'))
 
 @app.route('/checkout', methods=['GET', 'POST'])
 @login_required
