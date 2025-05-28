@@ -39,6 +39,7 @@ class Product(db.Model):
     images = db.relationship('ProductImage', back_populates='product', cascade='all, delete-orphan')
     cart_items = db.relationship('CartItem', back_populates='product', cascade='all, delete-orphan')
     order_items = db.relationship('OrderItem', back_populates='product', cascade='all, delete-orphan')
+    discount_codes = db.relationship('DiscountCode', back_populates='product')
 
 class ProductImage(db.Model):
     __tablename__ = 'product_images'
@@ -59,6 +60,9 @@ class DiscountCode(db.Model):
     percentage = db.Column(db.Float, nullable=False)
     expiry = db.Column(db.DateTime, nullable=False)
     active = db.Column(db.Boolean, default=True)
+    product_id = db.Column(db.Integer, db.ForeignKey('mithlanchal_store.products.id'), nullable=True)
+    category = db.Column(db.String(50), nullable=True)
+    product = db.relationship('Product', back_populates='discount_codes')
     orders = db.relationship('Order', back_populates='discount_code')
 
 class CartItem(db.Model):

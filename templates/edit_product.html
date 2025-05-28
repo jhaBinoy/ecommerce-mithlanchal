@@ -1,8 +1,15 @@
 {% extends 'base.html' %}
-{% block title %}Edit Product{% endblock %}
+{% block title %}Edit Product - The Mithlanchal{% endblock %}
 {% block content %}
 <div class="container my-5">
-    <h1 class="font-playfair">Edit Product</h1>
+    <h1 class="font-playfair">Edit Product: {{ product.name }}</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} font-poppins">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
     <form method="POST" enctype="multipart/form-data" action="{{ url_for('edit_product', product_id=product.id) }}">
         {{ form.hidden_tag() }}
         <div class="mb-3">
@@ -41,20 +48,25 @@
             {% endfor %}
         </div>
         <h3 class="font-playfair">Current Images</h3>
-        {% if image_urls %}
-            {% for url, image_id in image_urls|zip(image_ids) %}
+        {% if images %}
+            {% for url, image_id in images %}
                 <div class="mb-3">
-                    <img src="{{ url }}" width="100" alt="Product image" aria-label="Product image">
-                    <input type="checkbox" name="delete_images" value="{{ image_id }}"> Delete
-                    <label>Position:</label>
-                    <input type="number" name="position_{{ image_id }}" value="{{ loop.index0 + 1 }}" class="form-control w-25 d-inline">
+                    <img src="{{ url }}" width="100" alt="Product Image" aria-label="Product image" onerror="this.style.display='none';">
+                    <div class="form-check d-inline-block ms-2">
+                        <input type="checkbox" class="form-check-input" name="delete_images" id="delete_{{ image_id }}" value="{{ image_id }}">
+                        <label class="form-check-label font-poppins" for="delete_{{ image_id }}">Delete</label>
+                    </div>
+                    <div class="d-inline-block ms-3">
+                        <label for="position_{{ image_id }}" class="form-label font-poppins">Position:</label>
+                        <input type="number" name="position_{{ image_id }}" id="position_{{ image_id }}" value="{{ loop.index }}" class="form-control d-inline-block" style="width: 100px;">
+                    </div>
                     <p class="debug d-none">Debug URL: {{ url }}</p>
                 </div>
             {% endfor %}
         {% else %}
-            <p>No images available</p>
+            <p class="font-poppins">No images available.</p>
         {% endif %}
-        {{ form.submit(class="btn btn-primary") }}
+        {{ form.submit(class="btn btn-primary mt-3") }}
     </form>
     <a href="{{ url_for('admin') }}" class="btn btn-secondary mt-3">Back to Admin</a>
 </div>
